@@ -40,7 +40,7 @@
 
 ## 📦 安装
 
-到 [Releases](https://github.com/learningdog1/ForumWatch/releases) 下载对应平台的安装包：
+到 [Releases](https://github.com/DeraDream/ForumWatch/releases) 下载对应平台的安装包：
 
 | 平台 | 文件 | 注意 |
 | --- | --- | --- |

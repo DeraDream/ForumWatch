@@ -50,7 +50,7 @@ linux:
   # 512x512 png，自动下采样 hicolor 各档，AppImage/deb 共用。
   icon: resources/icon.png
   # deb 维护者必须有 email；用 GitHub noreply 地址避免暴露真实邮箱。
-  maintainer: learningdog1 <learningdog1@users.noreply.github.com>
+  maintainer: DeraDream <DeraDream@users.noreply.github.com>
   # desktop 文件名对齐 StartupWMClass/可执行名（linux 下默认小写 forumwatch），
   # 否则 GNOME/KDE 任务栏不会把运行中的窗口关联到启动器图标。
   syncDesktopName: true

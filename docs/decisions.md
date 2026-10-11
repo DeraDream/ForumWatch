@@ -236,7 +236,7 @@ electron-builder Windows 文档（macOS 交叉构建）、electron-builder#4853�
   - **状态暴露两条路径（如实写）**：`getStatus() → {lastTriggeredAt, count}` 由 runtime 的 emitStatus 在快照副本上附加后随**状态广播**（evStatus）下发——engine 自身不写该字段（status 是 engine 的事实源，watchdog 是 runtime 侧旁路观测）；IPC `status:get` 拉取路径直读 engine.getStatus()，**不带 runtime 侧实时值**（引擎快照不写该字段，拉取到的至多是恒 null/0 的占位值）——消费方以广播事件为该字段的事实源、按可选字段容忍缺失。**headless 装配未接**（watchdog 属桌面装配观测件，headless 接线留待后续包）。
   - 生命周期随 engine：startup 起、shutdown 停（退出路径先停它再 pause）；暂停不触发由 watchdog 自身按 desired 判定，无需随 pause/resume 启停。零 electron 依赖（放 desktop/ 仅因属桌面装配观测件）；时钟 / 定时器可注入，单测假时钟驱动触发矩阵。
 - **E1 更新检查（`desktop/update-check.ts`，UpdateChecker）**：GitHub Releases latest 轻量轮询。**边界：不是自动更新**——只做「检查 + 跳转下载页」，下载安装仍手动覆盖（mac 未签名做不了 electron-updater，ADR 4 的既有裁定不变）：
-  - 数据面 `GET api.github.com/repos/{repo}/releases/latest`（GitHub API 强制 User-Agent，无 UA 一律 403）；版本比较自实现 compareSemver（v/V 前缀容忍、点分数字、缺段补 0、最多比三段，空串/非数字段按 0）——不为一次三段比较引入 semver 依赖。**repo 是常量 `colmidad/forumwatch`**：本仓库当前未配置 git remote（实测为空），按仓库自身证据推导（electron-builder appId `com.colmidad.forumwatch` / package.json author / name）；若实际 remote 与此不符，改一个常量即可。
+  - 数据面 `GET api.github.com/repos/{repo}/releases/latest`（GitHub API 强制 User-Agent，无 UA 一律 403）；版本比较自实现 compareSemver（v/V 前缀容忍、点分数字、缺段补 0、最多比三段，空串/非数字段按 0）——不为一次三段比较引入 semver 依赖。**repo 是常量 `DeraDream/ForumWatch`**，与当前 git remote 和 GitHub Releases 宿主保持一致；仓库若改名/转移，改这一个常量即可。
   - 调度：启动 15s 后首轮 + 每 24h（setTimeout 自循环）+ 设置页「关于」卡手动 force check，三处共用同一条 outcome 写路径。**三态 available / up-to-date / error**（外加从未检查的 idle）；一切失败（网络 / 非 2xx / 坏 JSON / 载荷形状不对）**静默收敛**——只 log warn、绝不打扰用户更不炸，更新检查失败与监控完全无关。fetch 用主进程直连（不掺 runtime 的 proxy client：GitHub API 通常直连可达，真不可达下次轮询再试）。
   - 「打开下载页」经 openExternal 打开 release 页，github.com 并入主进程静态外链白名单（既有外链白名单体系加一个静态域）。
   - IPC：`update:check`（force check）/ `update:status`（最近结果缓存，不发包）。
@@ -323,7 +323,7 @@ R15 把评估默认改成禁思考后，`thinking:{type:"disabled"}` 只对智�
 
 # 第十八轮决策（2026-09-22，R18：issue #2 两建议——作者主页链接 + 命中词 # 标签）
 
-用户建议（learningdog1/ForumWatch#2）：①推送显示联系人并可打开对方私信页/个人主页（私有帖也能知道谁发的）；②命中词前加 `#` 便于按标签筛选。裁定：
+用户建议（历史 Issue #2）：①推送显示联系人并可打开对方私信页/个人主页（私有帖也能知道谁发的）；②命中词前加 `#` 便于按标签筛选。裁定：
 
 - **Topic 增可选 `authorUrl`（与 excerpt 同款约定）**：nodeseek 适配器解析作者锚点 `/space/{id}` → 绝对链接（`AUTHOR_LINK_RE` 严格匹配，锚点缺失/改版不落键）；V2EX 按 `/member/{username}` 构造；RSS 一般没有不构造。旧 hits jsonl 行无此键，消费方容忍 undefined。
 - **Telegram「👤 作者」渲染为超链接**（href 过 escapeHtml，属性上下文防注入）；**链接指向个人主页而非私信页**——NodeSeek 无公开稳定的私信直链，主页（/space/{id}）本身带私信入口，且链接直接来自页面锚点、零猜测；issue 原文「私信页**或者**个人主页」二选一，取可靠的那个。authorUrl 缺失（RSS/旧记录）退化为纯文本，消息逐字节同旧。

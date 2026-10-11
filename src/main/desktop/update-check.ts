@@ -22,7 +22,7 @@ import type { FetchLike } from '../net/http-types'
  * 更新检查的仓库坐标（'owner/name'）——与 git remote（GitHub Releases 的宿主仓库）
  * 保持一致；仓库若改名/转移，改这一个常量即可（release.yml 发布到当前 remote）。
  */
-export const UPDATE_REPO = 'learningdog1/ForumWatch'
+export const UPDATE_REPO = 'DeraDream/ForumWatch'
 
 /** 更新检查 API 端点（repo 注入；导出常量供测试断言 URL 拼接） */
 export const GITHUB_LATEST_RELEASE_URL = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`

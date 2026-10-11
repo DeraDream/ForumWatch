@@ -39,7 +39,7 @@ const okBody = (payload: unknown): HttpResponse => ({
   body: JSON.stringify(payload)
 })
 
-const release = (tag: string, url = 'https://github.com/colmidad/forumwatch/releases/tag/v9.9.9'): unknown => ({
+const release = (tag: string, url = 'https://github.com/DeraDream/ForumWatch/releases/tag/v9.9.9'): unknown => ({
   tag_name: tag,
   html_url: url,
   name: `ForumWatch ${tag}`,
@@ -113,7 +113,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
     const warns: string[] = []
     const checker = new UpdateChecker({
       currentVersion: '0.2.0',
-      repo: 'colmidad/forumwatch',
+      repo: 'DeraDream/ForumWatch',
       fetchFn: ff.fetchFn,
       now: () => 1_000,
       log: { warn: (m) => warns.push(m) }
@@ -122,7 +122,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
     expect(r).toEqual({
       current: '0.2.0',
       latest: 'v0.3.0',
-      downloadUrl: 'https://github.com/colmidad/forumwatch/releases/tag/v9.9.9'
+      downloadUrl: 'https://github.com/DeraDream/ForumWatch/releases/tag/v9.9.9'
     })
     expect(warns).toEqual([])
     // 结局缓存：available + 注入的 now
@@ -131,7 +131,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
       checkedAt: 1_000,
       current: '0.2.0',
       latest: 'v0.3.0',
-      downloadUrl: 'https://github.com/colmidad/forumwatch/releases/tag/v9.9.9'
+      downloadUrl: 'https://github.com/DeraDream/ForumWatch/releases/tag/v9.9.9'
     })
   })
 
@@ -140,7 +140,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
     ff.queue.push(okBody(release('v0.2.0'))) // 相等
     const checker = new UpdateChecker({
       currentVersion: '0.2.0',
-      repo: 'colmidad/forumwatch',
+      repo: 'DeraDream/ForumWatch',
       fetchFn: ff.fetchFn,
       now: () => 2_000
     })
@@ -163,7 +163,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
     const warns: string[] = []
     const checker = new UpdateChecker({
       currentVersion: '0.2.0',
-      repo: 'colmidad/forumwatch',
+      repo: 'DeraDream/ForumWatch',
       fetchFn: ff.fetchFn,
       log: { warn: (m) => warns.push(m) }
     })
@@ -180,7 +180,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
       const warns: string[] = []
       const checker = new UpdateChecker({
         currentVersion: '0.2.0',
-        repo: 'colmidad/forumwatch',
+        repo: 'DeraDream/ForumWatch',
         fetchFn: ff.fetchFn,
         log: { warn: (m) => warns.push(m) }
       })
@@ -219,7 +219,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
     ff.queue.push(okBody(release('v1.0.0')))
     const checker = new UpdateChecker({
       currentVersion: '0.2.0',
-      repo: 'colmidad/forumwatch',
+      repo: 'DeraDream/ForumWatch',
       fetchFn: ff.fetchFn
     })
     await checker.check()
@@ -231,7 +231,7 @@ describe('UpdateChecker.check（三态，fetch 注入）', () => {
     expect(UPDATE_INTERVAL_MS).toBe(24 * 60 * 60 * 1000)
     expect(UPDATE_CHECK_TIMEOUT_MS).toBe(15_000)
     expect(GITHUB_LATEST_RELEASE_URL).toBe(
-      'https://api.github.com/repos/learningdog1/ForumWatch/releases/latest'
+      'https://api.github.com/repos/DeraDream/ForumWatch/releases/latest'
     )
   })
 })
@@ -250,7 +250,7 @@ describe('UpdateChecker.start/stop（定时轮询，假时钟）', () => {
     const ff = fakeFetch()
     const checker = new UpdateChecker({
       currentVersion: '0.2.0',
-      repo: 'colmidad/forumwatch',
+      repo: 'DeraDream/ForumWatch',
       fetchFn: ff.fetchFn,
       log: { warn: (m) => warns.push(m) },
       delays: { initialMs: 100, intervalMs: 1_000 }

@@ -6,6 +6,12 @@
 
 格式约定：`## [vX.Y.Z] - YYYY-MM-DD`，新增/改进/修复分组，面向使用者而非开发者。
 
+## [v0.11.2] - 2026-10-11
+
+### 修复
+
+- **检查更新**：GitHub Releases 更新源已切换至 `DeraDream/ForumWatch`，下载入口与 Linux 安装包维护者信息同步更新为当前仓库。
+
 ## [v0.11.1] - 2026-10-11
 
 ### 修复
@@ -44,7 +50,7 @@
 
 ## [v0.10.0] - 2026-09-28
 
-Linux 桌面版来了（[#1](https://github.com/learningdog1/ForumWatch/issues/1)）：AppImage 与 deb 双格式、x86_64 与 arm64 双架构，Release 页直接下载。
+Linux 桌面版来了（[#1](https://github.com/DeraDream/ForumWatch/issues/1)）：AppImage 与 deb 双格式、x86_64 与 arm64 双架构，Release 页直接下载。
 
 ### 新增
 
@@ -96,7 +102,7 @@ Linux 桌面版来了（[#1](https://github.com/learningdog1/ForumWatch/issues/1
 
 ## [v0.8.1] - 2026-09-22
 
-实现 [issue #2](https://github.com/learningdog1/ForumWatch/issues/2) 的两条建议。
+实现 [issue #2](https://github.com/DeraDream/ForumWatch/issues/2) 的两条建议。
 
 ### 新增
 
