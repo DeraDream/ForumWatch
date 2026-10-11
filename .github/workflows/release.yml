@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  # 也允许在 GitHub Actions 页手动重试某次发布；常规发布仍由 v* 标签触发。
+  workflow_dispatch:
 
 # 默认最小权限；release job 单独提权 contents: write。
 permissions:
