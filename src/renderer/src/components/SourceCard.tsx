@@ -4,8 +4,8 @@
  *   显示 label 或 host）+ url 摘要 + 「过滤」展开（R5-P2c：分类白/黑名单 +
  *   作者黑名单，写回该 source 的 filters 字段）+ 「匹配」展开（R13：该来源的
  *   关键词/匹配模式/兴趣/语义阈值覆盖，写回 matching 字段）+ 启停开关 + 删除。
- *   默认 nodeseek 来源不可删除（至少保留一个来源，列表删空 sanitize 会回默认
- *   ——UI 侧直接禁删更清晰；下限按剔除待删除行后的生效列表算）。过滤/匹配
+ *   各来源均可删除；仍至少保留一个来源（列表删空 sanitize 会回默认，UI 侧直接
+ *   禁删更清晰；下限按剔除待删除行后的生效列表算）。过滤/匹配
  *   两个面板互斥单开（expanded = {id, kind}，防列表过长）。
  * - L1 删除不弹确认（settings.md §3.5）：已保存过的行转「待删除」态
  *   （删除线 + 琥珀徽标 + 撤销删除），保存栏汇总「含 M 项待删除」；
@@ -104,14 +104,13 @@ export function SourceCard(
     onChange(sources.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)))
   }
 
-  /** 默认 nodeseek 来源不可删；其余至少保留一个来源（删空 sanitize 会回默认） */
-  function canRemove(s: SourceConfig): boolean {
-    if (s.type === 'nodeseek' && s.id === 'nodeseek') return false
+  /** 所有来源一视同仁；仍至少保留一个来源（删空 sanitize 会回默认）。 */
+  function canRemove(): boolean {
     return liveSources.length > 1
   }
 
   function removeTitle(s: SourceConfig): string {
-    return canRemove(s)
+    return canRemove()
       ? `标记删除「${displayName(s) ?? typeBadge(s)}」（保存后生效；放弃修改可还原）`
       : '至少保留一个来源：列表删空会被重置回默认'
   }
@@ -309,7 +308,7 @@ export function SourceCard(
                           <button
                             type="button"
                             className="ent-btn danger"
-                            disabled={!canRemove(s)}
+                            disabled={!canRemove()}
                             title={removeTitle(s)}
                             aria-label={`删除来源 ${name ?? typeBadge(s)}`}
                             onClick={() => onMarkDelete(s.id)}

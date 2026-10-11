@@ -13,8 +13,9 @@
  * - exportBackup → GET /api/backup/export 走 Blob 下载;importBackup → 隐藏
  *   file input 选包上传 POST(桌面是系统对话框)。
  *
- * 认证:服务端配了 token 时,401 会触发一次 prompt 输入并存 localStorage
- * ('fw.webToken'),此后请求带 Bearer 头、SSE 带 ?token= 查询参数。
+ * 认证:服务端配了 token 时,401 会展示一次全屏认证页并存 localStorage
+ * ('fw.webToken'),此后请求带 Bearer 头、SSE 带 ?token= 查询参数。并发请求
+ * 共用同一轮输入，避免页面初始化时叠出多个系统 prompt。
  *
  * 环境标记:实际安装时在 window 打 __FW_WEB__ = true,isWebMode()/webPort()
  * 导出给 UI 判「桌面 vs 浏览器」(UA 法在嵌入式浏览器会误判,见 Titlebar)。
@@ -55,19 +56,73 @@ function saveToken(token: string): void {
   }
 }
 
-/** 带认证的 fetch:401 且尚未问过本轮时 prompt 一次令牌再重试 */
+let pendingTokenRequest: Promise<string | null> | null = null
+
+/**
+ * Web 管理端的令牌页。它刻意不走 window.prompt：系统弹窗不能协调并发的 401，
+ * 也无法展示令牌错误。页面只会同时存在一份，所有失败请求等它的同一结果。
+ */
+function requestToken(error = false): Promise<string | null> {
+  if (pendingTokenRequest !== null) return pendingTokenRequest
+
+  pendingTokenRequest = new Promise((resolve) => {
+    const page = document.createElement('main')
+    page.className = 'web-auth-page'
+    page.innerHTML = `
+      <section class="web-auth-card" aria-labelledby="web-auth-title">
+        <div class="web-auth-mark" aria-hidden="true">FW</div>
+        <p class="web-auth-kicker">FORUMWATCH</p>
+        <h1 id="web-auth-title">请输入访问令牌</h1>
+        <p class="web-auth-copy">此管理界面受保护。输入令牌后继续。</p>
+        <form class="web-auth-form">
+          <label class="web-auth-label" for="web-auth-token">访问令牌</label>
+          <input id="web-auth-token" class="input web-auth-input" type="password" autocomplete="current-password" required />
+          <p class="web-auth-error" role="alert"${error ? '' : ' hidden'}>令牌无效，请检查后重试。</p>
+          <div class="web-auth-actions">
+            <button class="btn" type="button" data-web-auth-cancel>取消</button>
+            <button class="btn btn-primary" type="submit">进入管理台</button>
+          </div>
+        </form>
+      </section>`
+
+    const input = page.querySelector<HTMLInputElement>('#web-auth-token')!
+    const form = page.querySelector<HTMLFormElement>('.web-auth-form')!
+    const cancel = page.querySelector<HTMLButtonElement>('[data-web-auth-cancel]')!
+    const finish = (token: string | null) => {
+      page.remove()
+      pendingTokenRequest = null
+      resolve(token)
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault()
+      const token = input.value.trim()
+      if (token !== '') finish(token)
+    })
+    cancel.addEventListener('click', () => finish(null))
+    document.body.append(page)
+    input.focus()
+  })
+
+  return pendingTokenRequest
+}
+
+/** 带认证的 fetch：401 时共享一次令牌输入，并在重试前重新读取已保存的令牌。 */
 async function authFetch(input: string, init?: RequestInit): Promise<Response> {
-  const token = storedToken()
   const withAuth = (i?: RequestInit): RequestInit => ({
     ...i,
-    headers: { ...(i?.headers as Record<string, string> | undefined), ...(token !== '' ? { authorization: `Bearer ${token}` } : {}) }
+    headers: {
+      ...(i?.headers as Record<string, string> | undefined),
+      ...(storedToken() !== '' ? { authorization: `Bearer ${storedToken()}` } : {})
+    }
   })
   let res = await fetch(input, withAuth(init))
-  if (res.status === 401) {
-    const asked = window.prompt('此管理界面需要访问令牌,请输入:') ?? ''
-    if (asked === '') return res
-    saveToken(asked.trim())
+  while (res.status === 401) {
+    const asked = await requestToken(storedToken() !== '')
+    if (asked === null) return res
+    saveToken(asked)
     res = await fetch(input, withAuth(init))
+    if (res.status !== 401) refreshEventSource()
   }
   return res
 }
@@ -97,6 +152,14 @@ type Listener<T> = (payload: T) => void
 /** 共享 EventSource:首个订阅时创建;channel → 订阅者集合 */
 const subscribers = new Map<string, Set<(payload: unknown) => void>>()
 let source: EventSource | null = null
+
+/** 令牌更新后让已建立的未认证 SSE 连接携带新令牌重连。 */
+function refreshEventSource(): void {
+  if (source === null) return
+  source.close()
+  source = null
+  if (subscribers.size > 0) ensureEventSource()
+}
 
 function ensureEventSource(): void {
   if (source !== null) return
