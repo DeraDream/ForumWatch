@@ -151,6 +151,8 @@ export const IPC = {
   checkUpdate: 'update:check',
   /** invoke() → UpdateCheckStatus：最近一次检查的缓存（手动或定时；从未检查 = state:'idle'） */
   getUpdateStatus: 'update:status',
+  /** Docker 网页部署：委托同 Compose 网络内的 WUD 更新指定 forumwatch 服务。 */
+  applyDockerUpdate: 'update:docker-apply',
   /**
    * invoke() → BackupExportResult（R8-B/E4）：showSaveDialog（默认名
    * forumwatch-backup-YYYYMMDD.json）→ 读 userData 四文件 parse → packBackup
@@ -393,6 +395,9 @@ export type HitFeedbackResult = { ok: true } | { ok: false; error: string }
  * - 'error'：上次检查失败（网络 / 非 2xx / 载荷解析；error 人读）。
  * current 在任何 state 都带（idle 也带——「关于」卡的版本号展示不依赖检查）。
  */
+/** Docker 更新启动结果；桌面端恒返回不支持。 */
+export type DockerUpdateResult = { ok: true } | { ok: false; error: string }
+
 export interface UpdateCheckStatus {
   state: 'idle' | 'available' | 'up-to-date' | 'error'
   /** 当前应用版本（app.getVersion()） */
@@ -457,6 +462,8 @@ export interface DesktopApi {
   checkUpdate(): Promise<UpdateCheckStatus>
   /** 更新检查（R8-B/E1）：最近一次结果缓存；从未检查返回 state:'idle' */
   getUpdateStatus(): Promise<UpdateCheckStatus>
+  /** Docker 网页部署：开始 WUD 更新；桌面端返回 {ok:false}。 */
+  applyDockerUpdate(): Promise<DockerUpdateResult>
   /**
    * 备份导出（R8-B/E4）：弹保存对话框 → 打包 config/seen/state/feedback 四段写
    * 所选路径（文件含明文凭据）。取消返回 {ok:false}；永不 reject。

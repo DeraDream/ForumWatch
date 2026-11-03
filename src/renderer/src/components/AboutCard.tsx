@@ -11,11 +11,14 @@ import type { UpdateCheckStatus } from '@shared/ipc'
 import { Field } from './Field'
 import { IconCheck, IconRadar } from './icons'
 import { formatClock } from '../lib/time'
+import { isWebMode } from '../lib/web-shim'
 
 export function AboutCard() {
   const [status, setStatus] = useState<UpdateCheckStatus | null>(null)
   const [checking, setChecking] = useState(false)
   const [openErr, setOpenErr] = useState(false)
+  const [updating, setUpdating] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -42,6 +45,17 @@ export function AboutCard() {
       }))
     } finally {
       setChecking(false)
+    }
+  }
+
+  async function applyDockerUpdate(): Promise<void> {
+    if (!window.confirm('将下载新镜像并短暂重建服务，期间网页会断开约数秒。确认立即更新？')) return
+    setUpdateError(null)
+    setUpdating(true)
+    const result = await window.api.applyDockerUpdate()
+    if (!result.ok) {
+      setUpdateError(result.error)
+      setUpdating(false)
     }
   }
 
@@ -106,12 +120,13 @@ export function AboutCard() {
               打开官方发布页
             </button>
           )}
-          {status?.state === 'available' && status.downloadUrl !== undefined && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void openDownload(status.downloadUrl as string)}
-            >
+          {status?.state === 'available' && isWebMode() && (
+            <button type="button" className="btn btn-primary" disabled={updating} onClick={() => void applyDockerUpdate()}>
+              {updating ? '正在更新…' : `立即更新（${status.latest}）`}
+            </button>
+          )}
+          {status?.state === 'available' && !isWebMode() && status.downloadUrl !== undefined && (
+            <button type="button" className="btn btn-primary" onClick={() => void openDownload(status.downloadUrl as string)}>
               打开下载页（{status.latest}）
             </button>
           )}
@@ -125,6 +140,8 @@ export function AboutCard() {
             </span>
           )}
         </div>
+        {updating && <div className="notice muted-notice">更新进度：正在请求更新器 → 下载镜像 → 重建服务。网页断开后会自动重连并刷新。</div>}
+        {updateError !== null && <div className="notice muted-notice">更新未启动：{updateError}</div>}
         {openErr && (
           <div className="notice muted-notice">
             打开下载页失败（浏览器唤起被拒）；可手动访问 GitHub Releases 页面。

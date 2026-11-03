@@ -642,6 +642,7 @@ export function registerIpcHandlers(rt: DesktopRuntime, bc: EventBroadcaster): v
 
   /** invoke() → UpdateCheckStatus：最近一次结果的缓存（不发包） */
   ipcMain.handle(IPC.getUpdateStatus, (): UpdateCheckStatus => updateStatus())
+  ipcMain.handle(IPC.applyDockerUpdate, () => ({ ok: false, error: '仅 Docker 网页部署支持在线更新' }))
 
   // ---- 备份导出/导入（R8-B/E4） ---------------------------------------------
 

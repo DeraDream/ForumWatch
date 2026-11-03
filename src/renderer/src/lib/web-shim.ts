@@ -32,7 +32,8 @@ import type {
   MatchTestRequest,
   MatchTestResult,
   StatsResult,
-  UpdateCheckStatus
+  UpdateCheckStatus,
+  DockerUpdateResult
 } from '@shared/ipc'
 import type { DailyReportInfo, EngineStatus, HitRecord, LogEntry } from '@shared/types'
 import { IPC } from '@shared/ipc'
@@ -334,6 +335,8 @@ export function createWebApi(): DesktopApi {
             checkedAt: null
           }) satisfies UpdateCheckStatus
       ),
+    applyDockerUpdate: () =>
+      safe('update:docker-apply', () => ({ ok: false, error: '无法连接 Docker 更新器' }) satisfies DockerUpdateResult),
     // 网页端备份:下载/上传(桌面版是系统对话框)
     exportBackup: async () => {
       const res = await authFetch('/api/backup/export')

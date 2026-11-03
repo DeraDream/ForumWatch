@@ -59,6 +59,7 @@ const api: DesktopApi = {
   // 更新检查（R8-B/E1）：手动 force check（返回本次三态）/ 最近一次结果缓存
   checkUpdate: () => ipcRenderer.invoke(IPC.checkUpdate),
   getUpdateStatus: () => ipcRenderer.invoke(IPC.getUpdateStatus),
+  applyDockerUpdate: () => ipcRenderer.invoke(IPC.applyDockerUpdate),
   // 备份导出/导入（R8-B/E4）：dialog + 打包内核都在主进程，preload 只透传
   exportBackup: () => ipcRenderer.invoke(IPC.exportBackup),
   importBackup: () => ipcRenderer.invoke(IPC.importBackup),

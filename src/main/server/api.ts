@@ -33,7 +33,7 @@ import { periodFor } from '../ai/category-report'
 import type { FileFeedbackStore } from '../ai/feedback'
 import type { HitsStore } from '../monitor/hits-store'
 import type { DispositionStore } from '../monitor/dispositions'
-import type { EngineControlResult, SaveConfigResult, OpenExternalResult, AiTestResult, DailyReportListResult, HitQueryOptions, HitQueryResult, MatchTestRequest, MatchTestResult, StatsResult, HitFeedbackResult, UpdateCheckStatus, CategoryReportInfo, CategoryReportKind, CategoryReportListResult, CategoryReportGenerateResult } from '../../shared/ipc'
+import type { EngineControlResult, SaveConfigResult, OpenExternalResult, AiTestResult, DailyReportListResult, HitQueryOptions, HitQueryResult, MatchTestRequest, MatchTestResult, StatsResult, HitFeedbackResult, UpdateCheckStatus, DockerUpdateResult, CategoryReportInfo, CategoryReportKind, CategoryReportListResult, CategoryReportGenerateResult } from '../../shared/ipc'
 import { allowedExternalDomains, isHostAllowed } from '../monitor/sources/registry'
 import { formatLocalDate } from '../monitor/hits-store'
 import { resolveSourceMatching } from '../monitor/matching'
@@ -153,6 +153,26 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
     const limit = typeof o['limit'] === 'number' && Number.isFinite(o['limit']) ? o['limit'] : 50
     const offset = typeof o['offset'] === 'number' && Number.isFinite(o['offset']) ? o['offset'] : 0
     return { fromDate, toDate, sourceId, matchedBy, text, limit, offset }
+  }
+
+  /** WUD 只在 Compose 内网可达；先强制扫描，再异步触发唯一允许的 Compose 更新器。 */
+  const applyDockerUpdate = async (): Promise<DockerUpdateResult> => {
+    try {
+      const watched = await fetch('http://wud:3000/api/containers/watch', { method: 'POST' })
+      if (!watched.ok) throw new Error(`WUD 检查失败（HTTP ${watched.status}）`)
+      const containers = await watched.json() as Array<{ id?: unknown; name?: unknown; updateAvailable?: unknown }>
+      const target = containers.find((c) => c.name === 'forumwatch')
+      if (typeof target?.id !== 'string') return { ok: false, error: 'WUD 未发现 forumwatch 服务' }
+      if (target.updateAvailable !== true) return { ok: false, error: '镜像已是最新版本' }
+      // 不等待重建完成：本服务会在请求途中被替换；前端已拿到 ok 后显示阶段进度，
+      // SSE 重连成功时 web-shim 自动刷新。
+      void fetch(`http://wud:3000/api/containers/${encodeURIComponent(target.id)}/triggers/dockercompose/local?overrideCooldown=true`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}'
+      }).catch((err) => ctx.logger.warn(`WUD update request failed: ${err instanceof Error ? err.message : String(err)}`))
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
   }
 
   const handlers = new Map<string, InvokeHandler>([
@@ -485,7 +505,8 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
       }
     ],
 
-    [IPC.getUpdateStatus, (): UpdateCheckStatus => updateStatus()]
+    [IPC.getUpdateStatus, (): UpdateCheckStatus => updateStatus()],
+    [IPC.applyDockerUpdate, applyDockerUpdate]
   ])
 
   return handlers
