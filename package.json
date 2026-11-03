@@ -21,8 +21,8 @@
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:win": "electron-vite build && electron-builder --win nsis --x64",
     "dist:linux": "electron-vite build && electron-builder --linux AppImage deb --x64 --arm64",
-    "docker:build": "docker build -t forward7/forumwatch:latest -t forward7/forumwatch:$npm_package_version .",
-    "docker:push": "docker push forward7/forumwatch:latest && docker push forward7/forumwatch:$npm_package_version",
+    "docker:build": "docker build -t yforward7/forumwatch:latest -t yforward7/forumwatch:$npm_package_version .",
+    "docker:push": "docker push yforward7/forumwatch:latest && docker push yforward7/forumwatch:$npm_package_version",
     "docker:release": "npm run docker:build && npm run docker:push"
   },
   "dependencies": {

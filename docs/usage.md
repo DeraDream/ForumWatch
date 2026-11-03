@@ -485,7 +485,7 @@ npm run engine:headless -- --duration 600 --interval 30    # 跑 10 分钟，30 
 
 ## Docker 部署
 
-官方镜像 `forward7/forumwatch`（amd64 / arm64 双架构）：无头内核 + **与桌面版完全相同的网页管理界面**——渲染层是同一份构建产物，浏览器里由 web-shim（`src/renderer/src/lib/web-shim.ts`）把桌面的 preload IPC 桥到 HTTP（`POST /api/invoke`）+ SSE（`GET /api/events`），UI 代码零改动。
+官方镜像 `yforward7/forumwatch`（amd64 / arm64 双架构）：无头内核 + **与桌面版完全相同的网页管理界面**——渲染层是同一份构建产物，浏览器里由 web-shim（`src/renderer/src/lib/web-shim.ts`）把桌面的 preload IPC 桥到 HTTP（`POST /api/invoke`）+ SSE（`GET /api/events`），UI 代码零改动。
 
 ### 快速开始
 
@@ -494,7 +494,7 @@ docker run -d --name forumwatch \
   -p 8787:8787 -v fw-data:/data \
   -e TZ=Asia/Shanghai \
   -e FW_WEB_TOKEN=换成强口令 \
-  forward7/forumwatch
+  yforward7/forumwatch
 ```
 
 浏览器打开 `http://<主机>:8787`——首次会提示输入访问令牌（即 `FW_WEB_TOKEN`，存 localStorage，之后不再问）。设置 → 关键词 / 来源 / 推送通道 / AI 与桌面版用法完全一致；网页保存配置后约半秒热重载生效（headless 配置 watch 语义，无需重启容器）。
@@ -513,7 +513,7 @@ docker run -d --name forumwatch \
 数据全部在 `/data` 卷：`config.json / seen.json / state.json / hits/ / pipeline/ / topics/ / reports/ / logs/ / feedback.json`。升级：
 
 ```bash
-docker pull forward7/forumwatch
+docker pull yforward7/forumwatch
 docker rm -f forumwatch && docker run -d ...（原参数，建议用 docker compose up -d）
 ```
 

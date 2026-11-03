@@ -6,7 +6,7 @@
 
 services:
   forumwatch:
-    image: forward7/forumwatch:latest
+    image: yforward7/forumwatch:latest
     container_name: forumwatch
     restart: unless-stopped
     ports:

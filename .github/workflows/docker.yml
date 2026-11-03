@@ -1,6 +1,6 @@
 name: Docker
 
-# Docker 镜像构建与推送(Docker Hub: forward7/forumwatch)。
+# Docker 镜像构建与推送(Docker Hub: yforward7/forumwatch)。
 # 触发:发版 tag(v*)、main 分支本工作流变更或手动 dispatch。
 # 发版时镜像同步更新 latest 与版本号 tag。secrets:DOCKERHUB_USERNAME /
 # DOCKERHUB_TOKEN(PAT,repo 级 secret)。
@@ -65,7 +65,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            forward7/forumwatch:latest
-            forward7/forumwatch:${{ steps.ver.outputs.version }}
+            yforward7/forumwatch:latest
+            yforward7/forumwatch:${{ steps.ver.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
