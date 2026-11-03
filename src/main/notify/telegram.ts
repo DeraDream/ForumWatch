@@ -187,7 +187,8 @@ export class TelegramNotifier implements Notifier {
           ),
           'HTML',
           false,
-          input.silent === true
+          input.silent === true,
+          input.topic.url
         )
       )
       input.report?.(this.id, true)
@@ -242,8 +243,15 @@ export class TelegramNotifier implements Notifier {
    * @param parseMode 'HTML'（命中/测试消息与 sendRaw 的富文本形态）或 null
    *   （sendRaw 纯文本，不带 parse_mode）
    * @param disablePreview true 时禁用链接预览（sendRaw 报告形态；命中/测试恒开预览）
+   * @param previewUrl 命中帖显式锁定预览目标，避免正文靠前的作者主页链接抢占预览。
    */
-  private async deliver(text: string, parseMode: 'HTML' | null, disablePreview = false, silent = false): Promise<void> {
+  private async deliver(
+    text: string,
+    parseMode: 'HTML' | null,
+    disablePreview = false,
+    silent = false,
+    previewUrl?: string
+  ): Promise<void> {
     const cfg = this.getConfig()
     if (!cfg.botToken || !cfg.chatId) {
       throw new TelegramError('telegram not configured')
@@ -260,7 +268,10 @@ export class TelegramNotifier implements Notifier {
         text,
         ...(silent ? { disable_notification: true } : {}),
         ...(parseMode !== null ? { parse_mode: parseMode } : {}),
-        link_preview_options: { is_disabled: disablePreview }
+        link_preview_options: {
+          is_disabled: disablePreview,
+          ...(!disablePreview && typeof previewUrl === 'string' && previewUrl !== '' ? { url: previewUrl } : {})
+        }
       })
     }
 

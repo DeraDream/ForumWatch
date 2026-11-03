@@ -262,13 +262,23 @@ describe('TelegramNotifier', () => {
       chat_id: string
       text: string
       parse_mode: string
-      link_preview_options: { is_disabled: boolean }
+      link_preview_options: { is_disabled: boolean; url?: string }
     }
     expect(body.chat_id).toBe('-100200')
     expect(body.text).toBe(formatHitMessage(topic, ['冰箱']))
     expect(body.parse_mode).toBe('HTML')
-    expect(body.link_preview_options).toEqual({ is_disabled: false })
+    expect(body.link_preview_options).toEqual({ is_disabled: false, url: topic.url })
     expect(h.sleeps).toEqual([]) // 首条不等待
+  })
+
+  it('sendHit 显式锁定帖子预览：作者主页链接在正文前也不抢占 URL', async () => {
+    const h = makeHarness(() => okRes)
+    const withAuthorLink = { ...topic, authorUrl: 'https://www.nodeseek.com/space/123' }
+    await h.notifier.sendHit({ topic: withAuthorLink, matchedKeywords: ['冰箱'] })
+    const body = JSON.parse(h.calls[0]?.init?.body ?? '{}') as {
+      link_preview_options: { is_disabled: boolean; url?: string }
+    }
+    expect(body.link_preview_options).toEqual({ is_disabled: false, url: withAuthorLink.url })
   })
 
   it('sendHit 第三参透传：锐评进 body.text，与 formatHitMessage 三参版本一致', async () => {
