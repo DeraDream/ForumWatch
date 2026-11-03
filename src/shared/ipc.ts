@@ -194,7 +194,7 @@ export const IPC = {
 } as const
 
 /** 引擎控制命令：pause/resume 改 desired；runNow 补一轮（paused 时 no-op）；sendTest 发测试消息 */
-export type EngineControlCommand = 'pause' | 'resume' | 'runNow' | 'sendTest'
+export type EngineControlCommand = 'pause' | 'resume' | 'runNow' | 'sendTest' | 'sendSilentTest'
 
 /** saveConfig 返回：成功带 sanitize 后的生效配置；失败带错误消息（如磁盘写失败） */
 export type SaveConfigResult = { ok: true; config: AppConfig } | { ok: false; error: string }

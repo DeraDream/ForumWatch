@@ -448,7 +448,7 @@ async function main(): Promise<number | null> {
     },
     sendHit: (input) => notifierImpl.sendHit(input),
     sendRaw: (text, opts) => notifierImpl.sendRaw(text, opts),
-    sendTest: () => notifierImpl.sendTest()
+    sendTest: (opts) => opts ? notifierImpl.sendTest(opts) : notifierImpl.sendTest()
   }
 
   // ---- AI 装配（D4/D5 + 第三轮锐评）：provider / evaluator / 锐评 / hits / 日报 -

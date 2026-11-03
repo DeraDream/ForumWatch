@@ -78,6 +78,29 @@ function makeHarness(
   return { notifier, calls, sleeps, setConfig: (c) => (cfg = c) }
 }
 
+describe('静默推送', () => {
+  it('静默测试带独立文案和 disable_notification，普通测试不继承', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendTest({ silent: true })
+    await h.notifier.sendTest()
+    const bodies = h.calls.map((c) => JSON.parse(c.init!.body as string))
+    expect(bodies[0].disable_notification).toBe(true)
+    expect(bodies[0].text).toContain('静默推送测试')
+    expect(bodies[1]).not.toHaveProperty('disable_notification')
+  })
+
+  it('仅静默命中带 disable_notification，后续普通命中与测试不继承', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendHit({ topic, matchedKeywords: [], silent: true })
+    await h.notifier.sendHit({ topic, matchedKeywords: [] })
+    await h.notifier.sendTest()
+    const bodies = h.calls.map((c) => JSON.parse(c.init!.body as string))
+    expect(bodies[0].disable_notification).toBe(true)
+    expect(bodies[1]).not.toHaveProperty('disable_notification')
+    expect(bodies[2]).not.toHaveProperty('disable_notification')
+  })
+})
+
 describe('escapeHtml', () => {
   it('& < > 全转义，& 先处理', () => {
     expect(escapeHtml('<script>&')).toBe('&lt;script&gt;&amp;')

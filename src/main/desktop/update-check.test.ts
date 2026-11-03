@@ -7,6 +7,7 @@ import {
   compareSemver,
   GITHUB_LATEST_RELEASE_URL,
   parseLatestRelease,
+  parseLatestReleasePage,
   UPDATE_CHECK_TIMEOUT_MS,
   UPDATE_INTERVAL_MS,
   UPDATE_INITIAL_DELAY_MS,
@@ -103,6 +104,62 @@ describe('parseLatestRelease（载荷形状）', () => {
     expect(parseLatestRelease([1, 2])).toBeNull()
     expect(parseLatestRelease({ tag_name: 123, html_url: 'https://x' })).toBeNull()
     expect(parseLatestRelease({ tag_name: 'v1', html_url: '' })).toBeNull()
+  })
+})
+
+describe('官方发布页回退', () => {
+  const repo = 'DeraDream/ForumWatch'
+  const page = (tag = 'v0.3.0'): HttpResponse => ({
+    status: 200, headers: {},
+    body: `<meta content="/${repo}/releases/tag/${tag}" property="og:url">`
+  })
+
+  it('解析相对/绝对元数据，仅接受同仓库正式版本；不从页面任意链接猜版本', () => {
+    expect(parseLatestReleasePage(page().body, repo)).toEqual({
+      tag: 'v0.3.0', url: `https://github.com/${repo}/releases/tag/v0.3.0`
+    })
+    expect(parseLatestReleasePage(`<meta property="og:url" content="https://github.com/${repo}/releases/tag/v1.0.0">`, repo)?.tag).toBe('v1.0.0')
+    for (const html of [
+      '<html>Access denied</html>', page('v1.0.0-beta.1').body,
+      '<meta property="og:url" content="https://evil.test/DeraDream/ForumWatch/releases/tag/v9.0.0">',
+      '<meta property="og:url" content="/other/repo/releases/tag/v9.0.0">',
+      page('%zz').body
+    ]) expect(parseLatestReleasePage(html, repo)).toBeNull()
+  })
+
+  it.each([403, 429])('API HTTP %s 自动回退官方 latest，仍能识别更新', async (status) => {
+    const ff = fakeFetch()
+    ff.queue.push({ status, headers: {}, body: '' }, page())
+    const checker = new UpdateChecker({ currentVersion: '0.2.0', repo, fetchFn: ff.fetchFn })
+    expect(await checker.check()).toMatchObject({ latest: 'v0.3.0' })
+    expect(ff.calls[1].url).toBe(`https://github.com/${repo}/releases/latest`)
+    expect(ff.calls[1].init?.timeoutMs).toBe(UPDATE_CHECK_TIMEOUT_MS)
+    expect(checker.lastOutcome()?.kind).toBe('available')
+  })
+
+  it('回退页面版本相同仍是已最新', async () => {
+    const ff = fakeFetch()
+    ff.queue.push({ status: 403, headers: {}, body: '' }, page('v0.2.0'))
+    const checker = new UpdateChecker({ currentVersion: '0.2.0', repo, fetchFn: ff.fetchFn })
+    expect(await checker.check()).toBeNull()
+    expect(checker.lastOutcome()?.kind).toBe('up-to-date')
+  })
+
+  it('两条路径均失败时如实提示限流及恢复时间，不伪报已最新', async () => {
+    const ff = fakeFetch()
+    ff.queue.push({ status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1800000000' }, body: '' }, page('invalid'))
+    const checker = new UpdateChecker({ currentVersion: '0.2.0', repo, fetchFn: ff.fetchFn, log: { warn: () => {} } })
+    expect(await checker.check()).toBeNull()
+    expect(checker.lastOutcome()).toMatchObject({ kind: 'error', error: expect.stringMatching(/限流.*恢复.*回退失败/) })
+  })
+
+  it('并发手动/自动检查共用请求', async () => {
+    const ff = fakeFetch()
+    ff.queue.push(okBody(release('v0.3.0')))
+    const checker = new UpdateChecker({ currentVersion: '0.2.0', repo, fetchFn: ff.fetchFn })
+    const [a, b] = await Promise.all([checker.check(), checker.check()])
+    expect(a).toEqual(b)
+    expect(ff.calls).toHaveLength(1)
   })
 })
 

@@ -81,6 +81,21 @@ function bodyOf(h: Harness, idx = 0): Record<string, unknown> {
 }
 
 describe('NtfyNotifier', () => {
+  it('静默测试使用最低优先级', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendTest({ silent: true })
+    expect(bodyOf(h).priority).toBe(1)
+    expect(bodyOf(h).message).toContain('静默推送测试')
+  })
+
+  it('静默命中使用最低优先级，普通命中不继承', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendHit({ topic, matchedKeywords: [], silent: true })
+    await h.notifier.sendHit({ topic, matchedKeywords: [] })
+    expect(bodyOf(h).priority).toBe(1)
+    expect(bodyOf(h, 1)).not.toHaveProperty('priority')
+  })
+
   it('sendHit 成功：官方默认根端点，JSON publish 字段齐全（topic/title/message/click/tags）', async () => {
     const h = makeHarness(() => okRes)
     await h.notifier.sendHit({ topic, matchedKeywords: ['冰箱'] })

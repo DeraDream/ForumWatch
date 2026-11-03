@@ -179,7 +179,7 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
       IPC.engineControl,
       async (args): Promise<EngineControlResult> => {
         const cmd = args[0]
-        if (cmd !== 'pause' && cmd !== 'resume' && cmd !== 'runNow' && cmd !== 'sendTest') {
+        if (cmd !== 'pause' && cmd !== 'resume' && cmd !== 'runNow' && cmd !== 'sendTest' && cmd !== 'sendSilentTest') {
           return { ok: false, error: `unknown command: ${String(cmd)}` }
         }
         try {
@@ -195,6 +195,9 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
               break
             case 'sendTest':
               await ctx.engine.sendTestNotification()
+              break
+            case 'sendSilentTest':
+              await ctx.engine.sendTestNotification(true)
               break
           }
           return { ok: true }

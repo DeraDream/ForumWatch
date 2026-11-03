@@ -18,6 +18,8 @@ import type { ChannelConfig, ChannelType, TelegramConfig, Topic } from '../../sh
 
 /** 命中推送的通道无关输入（R6-W1 从 TelegramNotifier.sendHit 参数形状提炼） */
 export interface HitMessageInput {
+  /** 请求静默送达；具体提醒效果受通道及客户端设置影响。 */
+  silent?: boolean
   /** 命中帖（title/category/author/url 为文案素材；sourceId 供通道侧溯源） */
   topic: Topic
   /** 字面命中的关键词；semantic/rule 命中时为空数组 */
@@ -73,7 +75,7 @@ export interface Notifier {
   readonly id: string
   sendHit(input: HitMessageInput): Promise<void>
   sendRaw(text: string, opts?: RawMessageOptions): Promise<void>
-  sendTest(): Promise<void>
+  sendTest(opts?: { silent?: boolean }): Promise<void>
 }
 
 /** 已实现发送器的通道类型（R6-W2 扩 bark/ntfy/webhook；见文件头注释） */

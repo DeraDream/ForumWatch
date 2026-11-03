@@ -18,8 +18,9 @@
  *   digest 批边界（lastDigestFlushAt + interval，由 engine 维护并传入；未开过
  *   批窗口时 null）。**quietHours 不与 digest 叠加**——摘要模式本身已是低打扰
  *   形态，digest 计时器是唯一释放闸。
- * - instant 模式：quietHours.enabled 且当前时刻窗内 → defer（reason=
- *   'quiet-hours'，nextFlushAt = 窗尾 epoch ms）；否则不 defer（原即时路径）。
+ * - instant 模式：quietHours.enabled 且当前时刻窗内：mode=silent 时立即发送
+ *   （silent=true），否则 defer（reason='quiet-hours'，nextFlushAt=窗尾）；
+ *   关闭/窗外不 defer 且不静默。digest 不叠加 quietHours。
  */
 
 import type { NotifyConfig } from '../../shared/types'
@@ -28,6 +29,8 @@ import type { NotifyConfig } from '../../shared/types'
 export interface NotifyAction {
   /** true = 本次命中不即时推送（进挂起队列） */
   defer: boolean
+  /** 窗内立即静默发送；缺失等同 false。 */
+  silent?: boolean
   /** 判定原因：'instant' 即时 / 'quiet-hours' 免打扰窗内 / 'digest' 摘要模式 */
   reason: 'instant' | 'quiet-hours' | 'digest'
   /**
@@ -122,6 +125,9 @@ export function decideNotifyAction(
     const pad2 = (n: number): string => String(n).padStart(2, '0')
     const hhmm = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`
     if (inQuietHours(hhmm, qh.startHHMM, qh.endHHMM)) {
+      if (qh.mode === 'silent') {
+        return { defer: false, silent: true, reason: 'quiet-hours', nextFlushAt: null }
+      }
       return { defer: true, reason: 'quiet-hours', nextFlushAt: nextQuietEnd(now, qh.startHHMM, qh.endHHMM) }
     }
   }

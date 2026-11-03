@@ -631,8 +631,16 @@ export class MonitorEngine {
   }
 
   /** 透传 notifier.sendTest（UI「发送测试消息」用）；异常由调用方处理 */
-  async sendTestNotification(): Promise<void> {
-    await this.deps.notifier.sendTest()
+  async sendTestNotification(silent = false): Promise<void> {
+    if (silent) {
+      // 手动测试只校验已保存的策略，不受开关、时段、监控暂停或推送总开关限制。
+      if (this.deps.getConfig().notify.quietHours.mode !== 'silent') {
+        throw new Error('请先选择「静默推送」并保存设置')
+      }
+      await this.deps.notifier.sendTest({ silent: true })
+    } else {
+      await this.deps.notifier.sendTest()
+    }
   }
 
   /** 实时状态快照（新对象，调用方改动不影响引擎内部）；ai 段每次派生（观测面） */
@@ -1645,7 +1653,11 @@ export class MonitorEngine {
       // payload（重试轮各自重新收集，detail 不跨轮残留）
       const collector = createNotifyDetailCollector()
       try {
-        await this.deps.notifier.sendHit({ ...entry.payload, report: collector.report })
+        await this.deps.notifier.sendHit({
+          ...entry.payload,
+          ...(decideNotifyAction(cfg.notify, new Date(this.now())).silent ? { silent: true } : {}),
+          report: collector.report
+        })
         this.deferredHits.delete(key)
         this.deps.seen.add(key)
         const hit = deferredHitRecord(entry, this.isoNow(), null, collector.detail)
@@ -1844,6 +1856,7 @@ export class MonitorEngine {
           matchedRule: matchedBy === 'rule' ? matchedRule : null,
           matchedRuleId: matchedBy === 'rule' ? matchedRuleId : null,
           semanticReason,
+          ...(deferAction.silent ? { silent: true } : {}),
           report: collector.report
         })
         notifiedAt = this.isoNow()

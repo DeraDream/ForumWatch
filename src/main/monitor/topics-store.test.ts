@@ -5,7 +5,8 @@
  * append 失败回滚去重键（同帖可重录）、day 字段随写入固化、coveredDays（含
  * sourceIds 过滤口径）、readonly 模式。
  *
- * 不用 fake timers：写入是 fire-and-forget 串行队列（writeTail 模式），测试用
+ * 只固定 Date（不替换 IO/定时器），防历史日桶随真实日期变旧而被保留清理删除。
+ * 写入是 fire-and-forget 串行队列（writeTail 模式），测试用
  * store.flush() 确定性排空；日期分桶/清理用注入的假时钟（now）。
  */
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -20,11 +21,14 @@ import type { Topic } from '../../shared/types'
 let dir: string
 
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 8, 21, 10))
   dir = await mkdtemp(join(tmpdir(), 'rss-monitor-topics-'))
 })
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
   await rm(dir, { recursive: true, force: true })
 })
 

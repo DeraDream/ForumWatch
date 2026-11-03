@@ -264,6 +264,10 @@ describe('sanitizeConfig', () => {
       startHHMM: '23:00', // 非法回默认
       endHHMM: '08:00'
     })
+    expect(hhmmOf({ mode: 'silent' }).mode).toBe('silent')
+    for (const mode of [undefined, 'defer', 'invalid', null]) {
+      expect(hhmmOf({ mode }).mode ?? 'defer').toBe('defer')
+    }
     expect(hhmmOf({ startHHMM: '23:00', endHHMM: '9:30' }).endHHMM).toBe('08:00')
     expect(hhmmOf({ startHHMM: '23:00', endHHMM: '08:00' })).toEqual({
       enabled: false,

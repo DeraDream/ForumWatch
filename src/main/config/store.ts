@@ -731,7 +731,7 @@ function sanitizeNotify(notify: AppConfig['notify'] | undefined): AppConfig['not
       ? (notify as {
           mode?: unknown
           digestIntervalMin?: unknown
-          quietHours?: { enabled?: unknown; startHHMM?: unknown; endHHMM?: unknown }
+          quietHours?: { enabled?: unknown; mode?: unknown; startHHMM?: unknown; endHHMM?: unknown }
           remoteControl?: { enabled?: unknown; allowedChatIds?: unknown }
         })
       : {}
@@ -748,6 +748,7 @@ function sanitizeNotify(notify: AppConfig['notify'] | undefined): AppConfig['not
     digestIntervalMin: sanitizeDigestIntervalMin(raw.digestIntervalMin),
     quietHours: {
       enabled: qh.enabled === true,
+      ...(qh.mode === 'silent' ? { mode: 'silent' as const } : {}),
       startHHMM: sanitizeTimeHHMM(qh.startHHMM as string | undefined, DEFAULT_QUIET_START_HHMM),
       endHHMM: sanitizeTimeHHMM(qh.endHHMM as string | undefined, DEFAULT_QUIET_END_HHMM)
     },

@@ -153,7 +153,7 @@ export function registerIpcHandlers(rt: DesktopRuntime, bc: EventBroadcaster): v
    * - sendTest 异常（TelegramError）在这里 catch 回传 {ok:false, error}。
    */
   ipcMain.handle(IPC.engineControl, async (_event, cmd: unknown): Promise<EngineControlResult> => {
-    if (cmd !== 'pause' && cmd !== 'resume' && cmd !== 'runNow' && cmd !== 'sendTest') {
+    if (cmd !== 'pause' && cmd !== 'resume' && cmd !== 'runNow' && cmd !== 'sendTest' && cmd !== 'sendSilentTest') {
       return { ok: false, error: `unknown command: ${String(cmd)}` }
     }
     try {
@@ -169,6 +169,9 @@ export function registerIpcHandlers(rt: DesktopRuntime, bc: EventBroadcaster): v
           break
         case 'sendTest':
           await rt.engine.sendTestNotification()
+          break
+        case 'sendSilentTest':
+          await rt.engine.sendTestNotification(true)
           break
       }
       return { ok: true }

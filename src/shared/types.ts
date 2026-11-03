@@ -551,6 +551,8 @@ export interface NotifyConfig {
   /** 免打扰时段（本地时区，跨午夜合法；W1-queue 消费，当前仅契约） */
   quietHours: {
     enabled: boolean
+    /** 窗内命中：silent 立即静默推送；defer 挂起到窗尾补发。旧配置缺省 defer。 */
+    mode?: 'silent' | 'defer'
     /** 'HH:MM' 起点 */
     startHHMM: string
     /** 'HH:MM' 终点 */

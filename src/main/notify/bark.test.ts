@@ -154,6 +154,21 @@ describe('formatHitSummaryLine（bark body / ntfy message 共用摘要行）', (
 })
 
 describe('BarkNotifier', () => {
+  it('静默测试使用 passive', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendTest({ silent: true })
+    expect(bodyOf(h).level).toBe('passive')
+    expect(bodyOf(h).body).toContain('静默推送测试')
+  })
+
+  it('静默命中使用 passive，普通命中不继承', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendHit({ topic, matchedKeywords: [], silent: true })
+    await h.notifier.sendHit({ topic, matchedKeywords: [] })
+    expect(bodyOf(h).level).toBe('passive')
+    expect(bodyOf(h, 1)).not.toHaveProperty('level')
+  })
+
   it('sendHit 成功：官方默认端点 /push，JSON body 字段齐全（device_key/title/body/url/group）', async () => {
     const h = makeHarness(() => okRes)
     await h.notifier.sendHit({ topic, matchedKeywords: ['冰箱'] })

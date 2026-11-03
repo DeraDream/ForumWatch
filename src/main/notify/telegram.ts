@@ -185,7 +185,9 @@ export class TelegramNotifier implements Notifier {
             input.matchedRule,
             input.semanticReason
           ),
-          'HTML'
+          'HTML',
+          false,
+          input.silent === true
         )
       )
       input.report?.(this.id, true)
@@ -195,8 +197,11 @@ export class TelegramNotifier implements Notifier {
     }
   }
 
-  async sendTest(): Promise<void> {
-    await this.enqueue(() => this.deliver('✅ ForumWatch 测试消息', 'HTML'))
+  async sendTest(opts?: { silent?: boolean }): Promise<void> {
+    await this.enqueue(() => this.deliver(
+      opts?.silent ? '🔕 ForumWatch 静默推送测试：此消息已请求无声送达，声音与振动效果取决于客户端设置。' : '✅ ForumWatch 测试消息',
+      'HTML', false, opts?.silent === true
+    ))
   }
 
   /**
@@ -238,7 +243,7 @@ export class TelegramNotifier implements Notifier {
    *   （sendRaw 纯文本，不带 parse_mode）
    * @param disablePreview true 时禁用链接预览（sendRaw 报告形态；命中/测试恒开预览）
    */
-  private async deliver(text: string, parseMode: 'HTML' | null, disablePreview = false): Promise<void> {
+  private async deliver(text: string, parseMode: 'HTML' | null, disablePreview = false, silent = false): Promise<void> {
     const cfg = this.getConfig()
     if (!cfg.botToken || !cfg.chatId) {
       throw new TelegramError('telegram not configured')
@@ -253,6 +258,7 @@ export class TelegramNotifier implements Notifier {
       body: JSON.stringify({
         chat_id: cfg.chatId,
         text,
+        ...(silent ? { disable_notification: true } : {}),
         ...(parseMode !== null ? { parse_mode: parseMode } : {}),
         link_preview_options: { is_disabled: disablePreview }
       })

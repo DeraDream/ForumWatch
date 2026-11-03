@@ -11,6 +11,28 @@
 
 /* ── 卡头 aux 状态点（AI 已配置/未配置、遥控 已启用/关闭：点 + 文字同现，
    不只靠颜色——纪律 §4-7）── 10px 圆点配 --lh-chip 18（徽标档继承） */
+/* 免打扰策略：沿用 quick/btn 的选中、焦点与禁用态，组合成分段切换块。 */
+.quiet-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.quiet-test-button {
+  margin-left: auto;
+}
+.quiet-mode-tabs {
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+}
+.quiet-mode-tabs .btn {
+  min-height: 32px;
+}
+
 .aux-dot {
   display: inline-block;
   width: 10px;

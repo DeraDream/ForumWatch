@@ -99,6 +99,21 @@ describe('deriveMatchedBy（命中方式推导）', () => {
 })
 
 describe('WebhookNotifier', () => {
+  it('静默测试携带 silent 标记', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendTest({ silent: true })
+    expect(bodyOf(h).silent).toBe(true)
+    expect(bodyOf(h).text).toContain('静默推送测试')
+  })
+
+  it('静默命中透传 silent，普通命中不继承', async () => {
+    const h = makeHarness(() => okRes)
+    await h.notifier.sendHit({ topic, matchedKeywords: [], silent: true })
+    await h.notifier.sendHit({ topic, matchedKeywords: [] })
+    expect(bodyOf(h).silent).toBe(true)
+    expect(bodyOf(h, 1)).not.toHaveProperty('silent')
+  })
+
   it('sendHit 成功：POST 到配置 url，payload 结构齐全、topic 为展示/溯源子集、ts 来自注入时钟', async () => {
     const h = makeHarness(() => okRes)
     await h.notifier.sendHit({ topic, matchedKeywords: ['冰箱'], commentary: '可以冲' })

@@ -65,6 +65,23 @@ beforeAll(() => {
   vi.useFakeTimers()
 })
 
+describe('静默测试 API', () => {
+  it('新命令透传静默标记，普通测试不携带标记；错误正常回传', async () => {
+    const sendTestNotification = vi.fn(async (_silent?: boolean) => {})
+    const handlers = createInvokeHandlers({
+      dataDir: '/nonexistent', logger,
+      engine: { sendTestNotification }
+    } as unknown as WebApiContext)
+    const control = handlers.get(IPC.engineControl)!
+    expect(await control(['sendSilentTest'])).toEqual({ ok: true })
+    expect(sendTestNotification).toHaveBeenLastCalledWith(true)
+    expect(await control(['sendTest'])).toEqual({ ok: true })
+    expect(sendTestNotification).toHaveBeenLastCalledWith()
+    sendTestNotification.mockRejectedValueOnce(new Error('请先保存设置'))
+    expect(await control(['sendSilentTest'])).toEqual({ ok: false, error: '请先保存设置' })
+  })
+})
+
 describe('invoke 处理器 · 分类阶段报告（R17）', () => {
   beforeEach(() => {
     vi.clearAllTimers()

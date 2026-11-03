@@ -545,6 +545,18 @@ describe('正常轮', () => {
     expect(hits[199].topic.id).toBe('304')
   })
 
+  it('静默测试要求已保存静默策略，但绕过开关、时段和暂停状态', async () => {
+    const h = build({ config: { notifyEnabled: false } })
+    await expect(h.engine.sendTestNotification(true)).rejects.toThrow('保存')
+    expect(h.sendTest).not.toHaveBeenCalled()
+    h.config.notify.quietHours.mode = 'silent'
+    h.config.notify.quietHours.enabled = false
+    h.engine.pause()
+    await h.engine.sendTestNotification(true)
+    expect(h.sendTest).toHaveBeenCalledWith({ silent: true })
+    expect(h.sendHit).not.toHaveBeenCalled()
+  })
+
   it('sendTestNotification 透传 notifier.sendTest', async () => {
     const h = build()
     await h.engine.sendTestNotification()
@@ -3501,6 +3513,27 @@ describe('免打扰挂起（R6-W1q / DEC-11：quiet-hours defer + flush）', () 
     vi.setSystemTime(new Date(2026, 8, 10, 23, 30, 0, 0))
   })
 
+  it('静默窗内立即发送并入已读，不积压；窗外恢复普通发送且不重复', async () => {
+    const notify = quietOn('02:00', '10:00')
+    notify.quietHours.mode = 'silent'
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 59))
+    const h = build({ impl: async () => [topic('1')], config: { notify } })
+    await h.engine.pollOnce()
+    h.fetchLatest.mockImplementation(async () => [topic('2', { title: '羊毛' }), topic('1')])
+    await h.engine.pollOnce()
+    expect(h.sendHit).toHaveBeenCalledWith(expect.objectContaining({ silent: true }))
+    expect(h.seen.has('nodeseek:2')).toBe(true)
+    expect(deferredQueueSize(h.engine)).toBe(0)
+    expect(h.engine.getStatus().totalHits).toBe(1)
+    advanceMs(60_000)
+    await h.engine.pollOnce()
+    expect(h.sendHit).toHaveBeenCalledTimes(1)
+    h.fetchLatest.mockImplementation(async () => [topic('3', { title: '羊毛新帖' }), topic('2', { title: '羊毛' }), topic('1')])
+    await h.engine.pollOnce()
+    expect(h.sendHit).toHaveBeenCalledTimes(2)
+    expect(h.sendHit.mock.calls[1]![0]).not.toHaveProperty('silent')
+  })
+
   it('窗内命中 → 挂起：不入 seen / 无 HitRecord / 无 onHit / 不推 / 不入相似窗（坑6 三不动）', async () => {
     const h = build({ impl: async () => [topic('1')], config: { notify: quietOn() } })
     await h.engine.pollOnce() // 基线
@@ -3518,6 +3551,20 @@ describe('免打扰挂起（R6-W1q / DEC-11：quiet-hours defer + flush）', () 
     expect(
       h.logger.getRecent().some((e) => e.level === 'info' && e.msg.includes('hit deferred (quiet-hours)'))
     ).toBe(true)
+  })
+
+  it('窗内从不推送切为静默：旧队列静默释放，不再重复', async () => {
+    const h = build({ impl: async () => [topic('1')], config: { notify: quietOn() } })
+    await h.engine.pollOnce()
+    h.fetchLatest.mockImplementation(async () => [topic('2', { title: '羊毛' }), topic('1')])
+    await h.engine.pollOnce()
+    expect(deferredQueueSize(h.engine)).toBe(1)
+    h.config.notify.quietHours.mode = 'silent'
+    await h.engine.pollOnce()
+    expect(h.sendHit).toHaveBeenCalledWith(expect.objectContaining({ silent: true }))
+    expect(deferredQueueSize(h.engine)).toBe(0)
+    await h.engine.pollOnce()
+    expect(h.sendHit).toHaveBeenCalledTimes(1)
   })
 
   it('窗尾过后首轮 flush：推送 + notifiedAt=冲刷时刻 + 入 seen + 入相似窗 + 计数（对齐即时路径三动作）', async () => {

@@ -339,6 +339,16 @@ describe('CompositeNotifier', () => {
     await expect(c2.sendRaw('日报')).rejects.toThrow('all channels failed: a: raw-a; b: raw-b')
   })
 
+  it('静默测试选项透传全部通道', async () => {
+    const a = mockNotifier('a')
+    const b = mockNotifier('b')
+    const received: unknown[] = []
+    a.notifier.sendTest = async (opts) => { received.push(opts) }
+    b.notifier.sendTest = async (opts) => { received.push(opts) }
+    await withNoRouting([a.notifier, b.notifier]).sendTest({ silent: true })
+    expect(received).toEqual([{ silent: true }, { silent: true }])
+  })
+
   it('sendTest 广播全部通道；单通道失败（其余成功）仍 resolve 且全通道都被调用', async () => {
     const a = mockNotifier('a', { failTest: new Error('test-a') })
     const b = mockNotifier('b')

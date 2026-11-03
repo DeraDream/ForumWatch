@@ -128,14 +128,17 @@
   line-height: var(--lh-base);
 }
 
-/* Zone B · 唯一滚动容器：组间距 32px 在 .settings-col；底部 88px 让位吸底保存栏；
+/* Zone B · 唯一滚动容器：组间距在 .settings-col；保存栏自身占据布局空间，
+   不再额外预留底部 88px（否则滚到底后保存栏也会悬空）。
    左右内距由 .page-settings 的居中算式统一给出 */
 .settings-scroll {
   min-height: 0;
   overflow-y: auto;
-  padding: 0 var(--space-lg) 88px 0;
+  padding: 0 var(--space-lg) 0 0;
+  overscroll-behavior-y: contain;
 }
 .settings-col {
+  min-height: 100%; /* 内容较少时也撑满右侧可用高度，保存栏始终贴底 */
   max-width: 760px; /* R12 大气档：表单列 680→760 */
   margin: 0 auto;
   display: flex;
@@ -303,6 +306,11 @@
   border-radius: 0;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(10px);
+}
+
+/* 短内容时吸收剩余空间；长内容时仍由 sticky 固定在内部滚动区底部。 */
+.settings-col > .savebar {
+  margin-top: auto;
 }
 
 /* 状态区三态：dirty（互斥优先） / ok（已保存·时刻） / err（保存失败可重试）。

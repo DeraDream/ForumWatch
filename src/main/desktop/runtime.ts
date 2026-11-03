@@ -846,8 +846,8 @@ class NotifierShell implements Notifier {
   sendRaw(text: string, opts?: RawMessageOptions): Promise<void> {
     return this.current.sendRaw(text, opts)
   }
-  sendTest(): Promise<void> {
-    return this.current.sendTest()
+  sendTest(opts?: { silent?: boolean }): Promise<void> {
+    return opts ? this.current.sendTest(opts) : this.current.sendTest()
   }
 }
 

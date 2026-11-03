@@ -3,9 +3,11 @@
  *
  * - **零 electron 依赖**（对齐 ADR 2：可移植内核风格；装配在 desktop/ipc.ts，
  *   fetch/时钟/日志全部构造注入，node 下单测直跑）。放 desktop/ 下是因为它只被
- *   桌面装配层消费（headless 无更新检查需求），不代表它可以 import electron。
+ *   桌面与 Web 管理界面共用，不代表它可以 import electron。
  * - 数据面：GET `https://api.github.com/repos/${repo}/releases/latest`，
  *   **必须带 User-Agent 头**（GitHub API 强制要求，无 UA 一律 403）。
+ *   API 返回 403/429 时回退同仓库的官方 /releases/latest 页面元数据，
+ *   不使用第三方镜像，不把错误页或预发布列表误判为正式版本。
  *   发布产物由 .github/workflows/release.yml 产出（tag v* → gh-release），
  *   所以 latest release 的 tag 即版本号（v 前缀 + 点分数字）。
  * - 版本比较：自实现 compareSemver（v/V 前缀容忍、点分数字、缺段补 0）——
@@ -16,7 +18,8 @@
  * - start()：启动延迟 15s + 每 24h 轮询，setTimeout 自循环（对齐 runtime.ts 日报
  *   定时器 / poller 的重排模式）；stop() 清计时器并使在途轮次不再重排。
  */
-import type { FetchLike } from '../net/http-types'
+import { load } from 'cheerio'
+import type { FetchLike, HttpResponse } from '../net/http-types'
 
 /**
  * 更新检查的仓库坐标（'owner/name'）——与 git remote（GitHub Releases 的宿主仓库）
@@ -32,7 +35,7 @@ export const UPDATE_INITIAL_DELAY_MS = 15_000
 /** start() 轮询间隔：24h */
 export const UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000
 /**
- * 单次检查的整体超时（ms），以 init.timeoutMs 交给注入的 fetchFn（ipc.ts 的
+ * 每个请求的整体超时（ms，API 失败回退最多两次请求），以 init.timeoutMs 交给注入的 fetchFn（ipc.ts 的
  * directFetch 会转成 AbortSignal.timeout）：不带超时的裸 fetch 挂到 TCP 超时
  * 为止（分钟级），15s 未响应按失败静默收敛（下次轮询再试）。
  */
@@ -96,6 +99,34 @@ export function parseLatestRelease(json: unknown): { tag: string; url: string } 
   return { tag: o.tag_name, url: o.html_url }
 }
 
+/** GitHub /releases/latest 跟随重定向后的页面，只信任同仓库的正式版本元数据。 */
+export function parseLatestReleasePage(html: string, repo: string): { tag: string; url: string } | null {
+  const $ = load(html)
+  const raw = $('meta[property="og:url"]').attr('content')
+  if (!raw) return null
+  try {
+    const url = new URL(raw, 'https://github.com')
+    const prefix = `/${repo}/releases/tag/`
+    if (url.origin !== 'https://github.com' || !url.pathname.startsWith(prefix)) return null
+    const tag = decodeURIComponent(url.pathname.slice(prefix.length))
+    if (!/^[vV]?\d+\.\d+\.\d+$/.test(tag)) return null
+    return { tag, url: `https://github.com${prefix}${encodeURIComponent(tag)}` }
+  } catch {
+    return null
+  }
+}
+
+function githubHttpError(res: HttpResponse): string {
+  if (res.status === 429 || (res.status === 403 && res.headers['x-ratelimit-remaining'] === '0')) {
+    const reset = Number(res.headers['x-ratelimit-reset']) * 1000
+    const at = Number.isFinite(reset) && reset > 0 && reset <= 8.64e15
+      ? `，额度预计 ${new Date(reset).toISOString()} 恢复` : ''
+    return `HTTP ${res.status}：GitHub API 请求限流（可能与共享出口有关）${at}`
+  }
+  if (res.status === 403) return 'HTTP 403：GitHub 拒绝请求（可能为访问限制或限流）'
+  return `HTTP ${res.status}`
+}
+
 export interface UpdateCheckerDeps {
   /** 当前应用版本（桌面装配传 app.getVersion()） */
   currentVersion: string
@@ -125,6 +156,8 @@ export class UpdateChecker {
   private timer: ReturnType<typeof setTimeout> | null = null
   /** 轮询代数：stop()/重新 start() 自增，使在途轮次的闭包失效不再重排 */
   private loopId = 0
+  /** 手动检查与自动检查并发时复用同一请求，避免重复消耗匿名 API 额度。 */
+  private inFlight: Promise<UpdateCheckResult | null> | null = null
 
   constructor(deps: UpdateCheckerDeps) {
     this.current = deps.currentVersion
@@ -141,28 +174,49 @@ export class UpdateChecker {
    * 已最新 / 一切失败 → null（失败 log warn，绝不抛）。无论哪种结局都刷新
    * lastOutcome（手动检查与定时轮询共用这一条写路径）。
    */
-  async check(): Promise<UpdateCheckResult | null> {
+  check(): Promise<UpdateCheckResult | null> {
+    if (this.inFlight !== null) return this.inFlight
+    this.inFlight = this.checkOnce().finally(() => { this.inFlight = null })
+    return this.inFlight
+  }
+
+  private async checkOnce(): Promise<UpdateCheckResult | null> {
     try {
       const res = await this.fetchFn(`https://api.github.com/repos/${this.repo}/releases/latest`, {
         headers: {
           // GitHub API 强制 UA；标识应用与版本，便于排查
-          'User-Agent': `ForumWatch-UpdateCheck/${this.current}`
+          'User-Agent': `ForumWatch-UpdateCheck/${this.current}`,
+          Accept: 'application/vnd.github+json'
         },
         // 检查整体超时（防裸 fetch 挂到 TCP 超时；适配层转 AbortSignal.timeout）
         timeoutMs: UPDATE_CHECK_TIMEOUT_MS
       })
-      if (res.status < 200 || res.status >= 300) {
-        throw new Error(`HTTP ${String(res.status)}`)
-      }
-      let json: unknown
-      try {
-        json = JSON.parse(res.body)
-      } catch {
-        throw new Error('latest release 响应不是合法 JSON')
-      }
-      const parsed = parseLatestRelease(json)
-      if (parsed === null) {
-        throw new Error('latest release 载荷缺少 tag_name / html_url')
+      let parsed: { tag: string; url: string } | null
+      if (res.status === 403 || res.status === 429) {
+        // 匿名 API 在共享 VPS 出口容易限流；回退同一仓库的官方 latest 页面，
+        // 而不是抓 releases 列表第一项（可能是预发布），也不使用第三方镜像。
+        const apiError = githubHttpError(res)
+        try {
+          const page = await this.fetchFn(`https://github.com/${this.repo}/releases/latest`, {
+            headers: { 'User-Agent': `ForumWatch-UpdateCheck/${this.current}`, Accept: 'text/html' },
+            timeoutMs: UPDATE_CHECK_TIMEOUT_MS
+          })
+          if (page.status < 200 || page.status >= 300) throw new Error(`HTTP ${page.status}`)
+          parsed = parseLatestReleasePage(page.body, this.repo)
+          if (parsed === null) throw new Error('无法识别官方发布页版本')
+        } catch (err) {
+          throw new Error(`${apiError}；官方发布页回退失败：${err instanceof Error ? err.message : String(err)}`)
+        }
+      } else {
+        if (res.status < 200 || res.status >= 300) throw new Error(githubHttpError(res))
+        let json: unknown
+        try {
+          json = JSON.parse(res.body)
+        } catch {
+          throw new Error('latest release 响应不是合法 JSON')
+        }
+        parsed = parseLatestRelease(json)
+        if (parsed === null) throw new Error('latest release 载荷缺少 tag_name / html_url')
       }
       if (compareSemver(parsed.tag, this.current) <= 0) {
         this.last = {

@@ -62,6 +62,7 @@ import { KeywordsCard } from '../components/KeywordsCard'
 import { MatchModeCard } from '../components/MatchModeCard'
 import { MatchTestCard } from '../components/MatchTestCard'
 import { NotifyCard } from '../components/NotifyCard'
+import { scrollWithin } from '../lib/scroll-within'
 import { PageHeader } from '../components/PageHeader'
 import { ProxyCard } from '../components/ProxyCard'
 import { RemoteControlCard } from '../components/RemoteControlCard'
@@ -385,6 +386,8 @@ export function Settings(props: {
   const [reloadTick, setReloadTick] = useState(0)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<Msg | null>(null)
+  const [silentTesting, setSilentTesting] = useState(false)
+  const [silentTestMsg, setSilentTestMsg] = useState<Msg | null>(null)
   const [testing, setTesting] = useState(false)
   const [testMsg, setTestMsg] = useState<Msg | null>(null)
   const [aiTesting, setAiTesting] = useState(false)
@@ -646,6 +649,30 @@ export function Settings(props: {
     }
   }
 
+  async function sendSilentTest(): Promise<void> {
+    if (draft == null || silentTesting || saving) return
+    if (dirty || saved?.notify.quietHours.mode !== 'silent' || draft.notify.quietHours.mode !== 'silent') {
+      setSilentTestMsg({ kind: 'warn', text: '请先选择「静默推送」并保存设置后测试。' })
+      return
+    }
+    if (!draft.channels.some(isChannelReadyUi)) {
+      setSilentTestMsg({ kind: 'err', text: '没有就绪通道，请先配置并保存推送通道。' })
+      return
+    }
+    setSilentTesting(true)
+    setSilentTestMsg({ kind: 'pending', text: '正在发送静默测试消息…' })
+    try {
+      const r = await window.api.engineControl('sendSilentTest')
+      setSilentTestMsg(r.ok
+        ? { kind: 'ok', text: '静默测试消息已发送（至少一个通道成功），请查收；声音与振动取决于客户端设置。' }
+        : { kind: 'err', text: `发送失败：${r.error}` })
+    } catch (e) {
+      setSilentTestMsg({ kind: 'err', text: `发送失败：${errText(e)}` })
+    } finally {
+      setSilentTesting(false)
+    }
+  }
+
   async function testAi(): Promise<void> {
     if (draft == null) return
     if (dirty) {
@@ -735,9 +762,11 @@ export function Settings(props: {
 
   function jumpToGroup(groupId: string): void {
     setActiveGroup(groupId)
-    document
-      .getElementById(groupId)
-      ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+    const sc = scrollRef.current
+    const target = document.getElementById(groupId)
+    if (sc != null && target != null) {
+      scrollWithin(sc, target, prefersReducedMotion() ? 'auto' : 'smooth')
+    }
   }
 
   // 深链：滚到目标卡 + 800ms 高亮环；同步子导航激活到所属组。高亮经 rAF 两拍
@@ -748,8 +777,9 @@ export function Settings(props: {
     if (link == null || !ready || !active) return
     const domId = settingsAnchorDomId(link.id)
     const el = document.getElementById(domId)
-    if (el == null) return
-    el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+    const sc = scrollRef.current
+    if (el == null || sc == null) return
+    scrollWithin(sc, el, prefersReducedMotion() ? 'auto' : 'smooth')
     setFlashId(null)
     const raf = requestAnimationFrame(() => setFlashId(domId))
     if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current)
@@ -926,6 +956,12 @@ export function Settings(props: {
               <NotifyCard
                 notify={draft.notify}
                 onChange={(notify) => patch({ notify })}
+                silentTest={{
+                  disabled: dirty || saving || saved?.notify.quietHours.mode !== 'silent',
+                  testing: silentTesting,
+                  msg: silentTestMsg,
+                  onTest: () => { void sendSilentTest() }
+                }}
                 notifyEnabled={draft.notifyEnabled}
                 onNotifyEnabledToggle={() => patch({ notifyEnabled: !draft.notifyEnabled })}
               />

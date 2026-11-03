@@ -32,6 +32,37 @@ function notifyCfg(overrides: Partial<NotifyConfig> = {}): NotifyConfig {
   }
 }
 
+describe('免打扰静默模式', () => {
+  const cfg = notifyCfg({ quietHours: {
+    enabled: true, mode: 'silent', startHHMM: '02:00', endHHMM: '10:00'
+  } })
+
+  it('02:00 起静默立即发送，10:00 起恢复正常', () => {
+    for (const hour of [2, 5, 9]) {
+      expect(decideNotifyAction(cfg, at(hour, 0))).toEqual({
+        defer: false, silent: true, reason: 'quiet-hours', nextFlushAt: null
+      })
+    }
+    for (const hour of [1, 10, 17]) {
+      expect(decideNotifyAction(cfg, at(hour, 0))).toEqual({
+        defer: false, reason: 'instant', nextFlushAt: null
+      })
+    }
+  })
+
+  it('关闭时不静默；摘要模式仍由摘要计时器控制', () => {
+    expect(decideNotifyAction({ ...cfg, quietHours: { ...cfg.quietHours, enabled: false } }, at(3, 0)).silent).toBeUndefined()
+    expect(decideNotifyAction({ ...cfg, mode: 'digest' }, at(3, 0))).toEqual({
+      defer: true, reason: 'digest', nextFlushAt: null
+    })
+  })
+
+  it('跨午夜静默，起止相同仍为空区间', () => {
+    expect(decideNotifyAction({ ...cfg, quietHours: { ...cfg.quietHours, startHHMM: '23:00', endHHMM: '08:00' } }, at(0, 0)).silent).toBe(true)
+    expect(decideNotifyAction({ ...cfg, quietHours: { ...cfg.quietHours, startHHMM: '10:00' } }, at(3, 0)).silent).toBeUndefined()
+  })
+})
+
 describe('hhmmToMinutes', () => {
   it('合法 HH:MM → 当日分钟数（容忍一位时）', () => {
     expect(hhmmToMinutes('00:00')).toBe(0)

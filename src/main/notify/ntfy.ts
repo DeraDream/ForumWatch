@@ -88,7 +88,8 @@ export class NtfyNotifier implements Notifier {
             input.commentary
           ),
           ...(input.topic.url !== '' ? { click: input.topic.url } : {}),
-          tags: [...TAGS]
+          tags: [...TAGS],
+          ...(input.silent ? { priority: 1 } : {})
         }
         return this.deliver(ntfyEndpoint(cfg.serverUrl), payload)
       })
@@ -99,8 +100,11 @@ export class NtfyNotifier implements Notifier {
     }
   }
 
-  async sendTest(): Promise<void> {
-    await this.enqueue(() => this.deliverPlainText('✅ ForumWatch 测试消息（ntfy）'))
+  async sendTest(opts?: { silent?: boolean }): Promise<void> {
+    await this.enqueue(() => this.deliverPlainText(
+      opts?.silent ? '🔕 ForumWatch 静默推送测试（ntfy）' : '✅ ForumWatch 测试消息（ntfy）',
+      opts?.silent
+    ))
   }
 
   /** 纯文本通知（日报等）：标题固定 'ForumWatch'，正文原文透传 */
@@ -109,12 +113,13 @@ export class NtfyNotifier implements Notifier {
   }
 
   /** 标题 'ForumWatch' 的纯文本载荷（sendRaw/sendTest 共用形状；不带 click） */
-  private async deliverPlainText(text: string): Promise<void> {
+  private async deliverPlainText(text: string, silent = false): Promise<void> {
     const cfg = this.requireConfig()
     await this.deliver(ntfyEndpoint(cfg.serverUrl), {
       topic: cfg.topic,
       title: 'ForumWatch',
       message: text,
+      ...(silent ? { priority: 1 } : {}),
       tags: [...TAGS]
     })
   }

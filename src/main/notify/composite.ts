@@ -84,8 +84,8 @@ export class CompositeNotifier implements Notifier {
   }
 
   /** 测试消息：广播全部通道，不走路由 */
-  async sendTest(): Promise<void> {
-    await this.fanOut(this.notifiers, (n) => n.sendTest())
+  async sendTest(opts?: { silent?: boolean }): Promise<void> {
+    await this.fanOut(this.notifiers, (n) => opts ? n.sendTest(opts) : n.sendTest())
   }
 
   /**

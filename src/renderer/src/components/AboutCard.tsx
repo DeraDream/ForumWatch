@@ -35,7 +35,11 @@ export function AboutCard() {
     try {
       setStatus(await window.api.checkUpdate())
     } catch {
-      /* invoke 层已收敛为 state:'error'；真 reject 只能是通道坏了，忽略 */
+      setStatus((prev) => ({
+        state: 'error', current: prev?.current ?? '未知',
+        checkedAt: new Date().toISOString(),
+        error: '无法连接更新检查服务，请稍后重试或打开官方发布页'
+      }))
     } finally {
       setChecking(false)
     }
@@ -86,7 +90,7 @@ export function AboutCard() {
       </Field>
       <Field
         label="检查更新"
-        hint="应用启动 15 秒后自动检查一次，此后每 24 小时向 GitHub Releases 检查；也可随时手动检查。检查失败不影响监控。"
+        hint="应用启动 15 秒后自动检查一次，此后每 24 小时检查；GitHub API 限流或拒绝访问时自动回退官方发布页。检查失败不影响监控；Docker 部署需手动拉取新镜像。"
       >
         <div className="input-row">
           <button
@@ -97,6 +101,11 @@ export function AboutCard() {
           >
             检查更新
           </button>
+          {status?.state === 'error' && (
+            <button type="button" className="btn" onClick={() => void openDownload('https://github.com/DeraDream/ForumWatch/releases/latest')}>
+              打开官方发布页
+            </button>
+          )}
           {status?.state === 'available' && status.downloadUrl !== undefined && (
             <button
               type="button"

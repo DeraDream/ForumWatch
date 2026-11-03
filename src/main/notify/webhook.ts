@@ -107,6 +107,7 @@ export class WebhookNotifier implements Notifier {
           matchedRule: input.matchedRule ?? null,
           semanticReason: input.semanticReason ?? null,
           commentary: input.commentary ?? null,
+          ...(input.silent ? { silent: true } : {}),
           ts: this.now()
         }
         return this.deliver(cfg.url, payload, cfg.secret)
@@ -118,8 +119,11 @@ export class WebhookNotifier implements Notifier {
     }
   }
 
-  async sendTest(): Promise<void> {
-    await this.enqueue(() => this.deliverPlainText('✅ ForumWatch 测试消息（webhook）'))
+  async sendTest(opts?: { silent?: boolean }): Promise<void> {
+    await this.enqueue(() => this.deliverPlainText(
+      opts?.silent ? '🔕 ForumWatch 静默推送测试（webhook）' : '✅ ForumWatch 测试消息（webhook）',
+      opts?.silent
+    ))
   }
 
   /** 纯文本通知（日报等）：{type:'raw', text, ts} */
@@ -127,9 +131,9 @@ export class WebhookNotifier implements Notifier {
     await this.enqueue(() => this.deliverPlainText(text))
   }
 
-  private async deliverPlainText(text: string): Promise<void> {
+  private async deliverPlainText(text: string, silent = false): Promise<void> {
     const cfg = this.requireConfig()
-    await this.deliver(cfg.url, { type: 'raw', text, ts: this.now() }, cfg.secret)
+    await this.deliver(cfg.url, { type: 'raw', text, ts: this.now(), ...(silent ? { silent: true } : {}) }, cfg.secret)
   }
 
   /** 配置未就绪 fail-fast（engine 侧 configured 闸正常情况下已拦下，这里兜底） */

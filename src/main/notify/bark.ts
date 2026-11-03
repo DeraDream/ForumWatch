@@ -157,7 +157,8 @@ export class BarkNotifier implements Notifier {
             input.commentary
           ),
           ...(input.topic.url !== '' ? { url: input.topic.url } : {}),
-          group: 'ForumWatch'
+          group: 'ForumWatch',
+          ...(input.silent ? { level: 'passive' } : {})
         }
         return this.deliver(barkEndpoint(cfg.serverUrl), payload)
       })
@@ -168,8 +169,11 @@ export class BarkNotifier implements Notifier {
     }
   }
 
-  async sendTest(): Promise<void> {
-    await this.enqueue(() => this.deliverPlainText('✅ ForumWatch 测试消息（bark）'))
+  async sendTest(opts?: { silent?: boolean }): Promise<void> {
+    await this.enqueue(() => this.deliverPlainText(
+      opts?.silent ? '🔕 ForumWatch 静默推送测试（bark）' : '✅ ForumWatch 测试消息（bark）',
+      opts?.silent
+    ))
   }
 
   /** 纯文本通知（日报等）：标题固定 'ForumWatch'，正文原文透传 */
@@ -178,12 +182,13 @@ export class BarkNotifier implements Notifier {
   }
 
   /** 标题 'ForumWatch' 的纯文本载荷（sendRaw/sendTest 共用形状；不带帖子 url） */
-  private async deliverPlainText(text: string): Promise<void> {
+  private async deliverPlainText(text: string, silent = false): Promise<void> {
     const cfg = this.requireConfig()
     await this.deliver(barkEndpoint(cfg.serverUrl), {
       device_key: cfg.deviceKey,
       title: 'ForumWatch',
       body: text,
+      ...(silent ? { level: 'passive' } : {}),
       group: 'ForumWatch'
     })
   }
