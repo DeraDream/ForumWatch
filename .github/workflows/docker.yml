@@ -2,7 +2,7 @@ name: Docker
 
 # Docker 镜像构建与推送(Docker Hub: forward7/forumwatch)。
 # 触发:发版 tag(v*)、main 分支本工作流变更或手动 dispatch。
-# 发版时镜像同步更新(latest + 版本号双 tag)。secrets:DOCKERHUB_USERNAME /
+# 发版时镜像同步更新 latest 与版本号 tag。secrets:DOCKERHUB_USERNAME /
 # DOCKERHUB_TOKEN(PAT,repo 级 secret)。
 on:
   push:
