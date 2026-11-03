@@ -1,6 +1,6 @@
 name: Docker
 
-# Docker 镜像构建与推送(Docker Hub: cashewchickengazgazgood/forumwatch)。
+# Docker 镜像构建与推送(Docker Hub: forward7/forumwatch)。
 # 触发:发版 tag(v*)或手动 dispatch——与 Release 工作流同步,桌面版发版的
 # 同时镜像也更新(latest + 版本号双 tag)。secrets:DOCKERHUB_USERNAME /
 # DOCKERHUB_TOKEN(PAT,repo 级 secret)。
@@ -8,6 +8,10 @@ on:
   push:
     tags:
       - 'v*'
+    # 发布配置修复可直接在 main 重建当前版本，不必移动已发布的版本标签。
+    branches: [main]
+    paths:
+      - '.github/workflows/docker.yml'
   workflow_dispatch:
 
 permissions:
@@ -51,7 +55,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            cashewchickengazgazgood/forumwatch:latest
-            cashewchickengazgazgood/forumwatch:${{ steps.ver.outputs.version }}
+            forward7/forumwatch:latest
+            forward7/forumwatch:${{ steps.ver.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

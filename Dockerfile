@@ -10,7 +10,7 @@
 #   2. runtime:node:22-alpine + 生产依赖 + server.js + web 静态产物。
 #
 # 运行:docker run -d -p 8787:8787 -v fw-data:/data \
-#   -e TZ=Asia/Shanghai -e FW_WEB_TOKEN=换个强口令 cashewchickengazgazgood/forumwatch
+#   -e TZ=Asia/Shanghai -e FW_WEB_TOKEN=换个强口令 forward7/forumwatch
 # 数据全部落 /data(config/seen/state/hits/logs/...),升级换镜像不丢数据。
 # 管理界面:http://<host>:8787(与桌面版同一套 UI;公网部署务必设 FW_WEB_TOKEN)。
 
