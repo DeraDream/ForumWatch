@@ -19,6 +19,7 @@ export function AboutCard() {
   const [openErr, setOpenErr] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [confirmUpdate, setConfirmUpdate] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -49,7 +50,7 @@ export function AboutCard() {
   }
 
   async function applyDockerUpdate(): Promise<void> {
-    if (!window.confirm('将下载新镜像并短暂重建服务，期间网页会断开约数秒。确认立即更新？')) return
+    setConfirmUpdate(false)
     setUpdateError(null)
     setUpdating(true)
     const result = await window.api.applyDockerUpdate()
@@ -121,7 +122,7 @@ export function AboutCard() {
             </button>
           )}
           {status?.state === 'available' && isWebMode() && (
-            <button type="button" className="btn btn-primary" disabled={updating} onClick={() => void applyDockerUpdate()}>
+            <button type="button" className="btn btn-primary" disabled={updating} onClick={() => setConfirmUpdate(true)}>
               {updating ? '正在更新…' : `立即更新（${status.latest}）`}
             </button>
           )}
@@ -148,6 +149,28 @@ export function AboutCard() {
           </div>
         )}
       </Field>
+      {confirmUpdate && (
+        <div className="update-modal-backdrop" role="presentation">
+          <section className="update-modal" role="dialog" aria-modal="true" aria-labelledby="docker-update-title">
+            <h3 id="docker-update-title">更新 ForumWatch</h3>
+            <p>将下载新版镜像并短暂重建服务，配置与历史数据不会丢失。</p>
+            <div className="input-row">
+              <button type="button" className="btn" onClick={() => setConfirmUpdate(false)}>取消</button>
+              <button type="button" className="btn btn-primary" onClick={() => void applyDockerUpdate()}>立即更新</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {updating && (
+        <div className="update-modal-backdrop" role="presentation">
+          <section className="update-modal" role="dialog" aria-modal="true" aria-labelledby="docker-update-progress-title">
+            <h3 id="docker-update-progress-title">正在更新</h3>
+            <p>正在请求更新器。镜像已预拉取时会很快完成；服务重建后页面将自动刷新。</p>
+            <div className="update-progress" aria-label="更新进行中"><span /></div>
+            <p className="feedback muted">检查镜像 → 重建服务 → 等待恢复</p>
+          </section>
+        </div>
+      )}
       {status?.state === 'available' && (
         <Field label="最新版本" hint="下载页含 macOS（dmg）与 Windows（nsis 安装器）两种安装包。">
           <span className="feedback warn num">

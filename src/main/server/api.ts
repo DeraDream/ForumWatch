@@ -155,10 +155,21 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
     return { fromDate, toDate, sourceId, matchedBy, text, limit, offset }
   }
 
-  /** WUD 只在 Compose 内网可达；先强制扫描，再异步触发唯一允许的 Compose 更新器。 */
+  /** WUD 只在 Compose 内网可达；凭据由宿主 .env 注入，绝不下发至浏览器。 */
+  const wudUser = process.env.FW_WUD_USER
+  const wudPassword = process.env.FW_WUD_PASSWORD
+  const wudHeaders = (): Record<string, string> =>
+    wudUser !== undefined && wudPassword !== undefined
+      ? { authorization: `Basic ${Buffer.from(`${wudUser}:${wudPassword}`).toString('base64')}` }
+      : {}
+
+  /** 先强制扫描，再异步触发唯一允许的 Compose 更新器。 */
   const applyDockerUpdate = async (): Promise<DockerUpdateResult> => {
     try {
-      const watched = await fetch('http://wud:3000/api/containers/watch', { method: 'POST' })
+      if (wudUser === undefined || wudPassword === undefined) {
+        return { ok: false, error: '未配置 WUD 凭据（FW_WUD_USER / FW_WUD_PASSWORD）' }
+      }
+      const watched = await fetch('http://wud:3000/api/containers/watch', { method: 'POST', headers: wudHeaders() })
       if (!watched.ok) throw new Error(`WUD 检查失败（HTTP ${watched.status}）`)
       const containers = await watched.json() as Array<{ id?: unknown; name?: unknown; updateAvailable?: unknown }>
       const target = containers.find((c) => c.name === 'forumwatch')
@@ -167,7 +178,7 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
       // 不等待重建完成：本服务会在请求途中被替换；前端已拿到 ok 后显示阶段进度，
       // SSE 重连成功时 web-shim 自动刷新。
       void fetch(`http://wud:3000/api/containers/${encodeURIComponent(target.id)}/triggers/dockercompose/local?overrideCooldown=true`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}'
+        method: 'POST', headers: { ...wudHeaders(), 'content-type': 'application/json' }, body: '{}'
       }).catch((err) => ctx.logger.warn(`WUD update request failed: ${err instanceof Error ? err.message : String(err)}`))
       return { ok: true }
     } catch (err) {

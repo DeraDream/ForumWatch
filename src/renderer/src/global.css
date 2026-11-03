@@ -17,6 +17,7 @@
 @import './theme.css';
 @import './styles/base.css';
 @import './styles/primitives.css';
+
 @import './styles/overlays.css';
 @import './styles/shell.css';
 @import './styles/settings-core.css';
@@ -25,3 +26,11 @@
 @import './styles/reports.css';
 @import './styles/settings-monitor.css';
 @import './styles/settings-notify.css';
+
+.update-modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgb(0 0 0 / 55%); }
+.update-modal { width: min(420px, 100%); padding: 24px; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 20px 60px rgb(0 0 0 / 35%); }
+.update-modal h3 { margin: 0 0 10px; }
+.update-modal p { margin: 0 0 18px; color: var(--color-text-muted); line-height: 1.6; }
+.update-progress { height: 8px; overflow: hidden; border-radius: 999px; background: var(--color-border); }
+.update-progress span { display: block; width: 42%; height: 100%; border-radius: inherit; background: var(--color-primary); animation: fw-update-progress 1.2s ease-in-out infinite; }
+@keyframes fw-update-progress { from { transform: translateX(-110%); } to { transform: translateX(350%); } }
