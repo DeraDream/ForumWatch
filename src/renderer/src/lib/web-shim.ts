@@ -152,6 +152,12 @@ type Listener<T> = (payload: T) => void
 /** 共享 EventSource:首个订阅时创建;channel → 订阅者集合 */
 const subscribers = new Map<string, Set<(payload: unknown) => void>>()
 let source: EventSource | null = null
+/**
+ * Docker 自动更新会短暂重建 Web 服务。SSE 曾成功建立后断线、随后重连时刷新页面，
+ * 以加载新镜像里的静态资源；首次连接失败不刷新，避免服务启动期进入刷新循环。
+ */
+let sourceOpenedOnce = false
+let reloadWhenReconnected = false
 
 /** 令牌更新后让已建立的未认证 SSE 连接携带新令牌重连。 */
 function refreshEventSource(): void {
@@ -166,6 +172,17 @@ function ensureEventSource(): void {
   const token = storedToken()
   const qs = token !== '' ? `?token=${encodeURIComponent(token)}` : ''
   source = new EventSource(`/api/events${qs}`)
+  source.onopen = () => {
+    if (sourceOpenedOnce && reloadWhenReconnected) {
+      window.location.reload()
+      return
+    }
+    sourceOpenedOnce = true
+  }
+  source.onerror = () => {
+    // EventSource 自带退避重连；仅记住这一次中断，等成功 open 后再刷新。
+    if (sourceOpenedOnce) reloadWhenReconnected = true
+  }
   source.onmessage = (ev: MessageEvent<string>) => {
     try {
       const { channel, payload } = JSON.parse(ev.data) as { channel: string; payload: unknown }

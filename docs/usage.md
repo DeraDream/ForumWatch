@@ -519,6 +519,25 @@ docker rm -f forumwatch && docker run -d ...（原参数，建议用 docker comp
 
 升级不丢数据；桌面版凭据密文（`enc:v1:`）在容器里按未配置处理（PlainSecretBox 语义，见故障排查矩阵）——从桌面迁到 Docker 时在网页设置里重填一次凭据即可，或用备份导出 / 导入（网页「数据」卡：导出为浏览器下载的 JSON，导入选文件上传；导入成功后容器会自动暂停监控，**重启容器生效**，`restart: unless-stopped` 下即 `docker restart forumwatch`）。
 
+### 自动镜像更新（WUD）
+
+仓库提供的 `docker-compose.yml` 已集成维护中的 [WUD](https://github.com/getwud/wud) Docker Compose 更新器。它每 6 小时检查 `yforward7/forumwatch:latest` 的镜像摘要；发现新版本时自动拉取、重建**仅** `forumwatch` 服务，并等待健康检查。新容器不健康会在 5 分钟内自动回滚。网页会因容器重建短暂断开，恢复连接后会自动刷新以加载新版静态资源；配置和历史数据都在 `fw-data` 卷中，不会丢失。
+
+首次升级 Compose 文件后执行一次：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+WUD 是唯一读取 Docker Socket 的容器；ForumWatch 本身没有 Docker 控制权限。WUD 管理页只监听服务器本机 `127.0.0.1:3000`，不可直接暴露到公网。如需从本地查看检查/拉取/重建状态，可建立 SSH 隧道：
+
+```bash
+ssh -L 3000:127.0.0.1:3000 root@你的服务器
+```
+
+然后访问 `http://localhost:3000`。
+
 ### 与桌面版的差异
 
 功能面完全一致（监控 / 匹配 / 推送 / AI / 日报 / 分类总结报告 / 遥控 / 流水 / 统计 / 测试台），差异仅三处：
