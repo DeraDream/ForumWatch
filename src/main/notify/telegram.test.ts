@@ -263,11 +263,16 @@ describe('TelegramNotifier', () => {
       text: string
       parse_mode: string
       link_preview_options: { is_disabled: boolean; url?: string }
+      reply_markup: { inline_keyboard: Array<Array<{ text: string; url: string }>> }
     }
     expect(body.chat_id).toBe('-100200')
     expect(body.text).toBe(formatHitMessage(topic, ['冰箱']))
     expect(body.parse_mode).toBe('HTML')
     expect(body.link_preview_options).toEqual({ is_disabled: false, url: topic.url })
+    // 单个 inline keyboard 按钮独占一行，Telegram 客户端会将其铺满卡片宽度。
+    expect(body.reply_markup).toEqual({
+      inline_keyboard: [[{ text: '打开原帖', url: topic.url }]]
+    })
     expect(h.sleeps).toEqual([]) // 首条不等待
   })
 

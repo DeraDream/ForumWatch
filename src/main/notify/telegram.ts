@@ -188,6 +188,7 @@ export class TelegramNotifier implements Notifier {
           'HTML',
           false,
           input.silent === true,
+          input.topic.url,
           input.topic.url
         )
       )
@@ -244,13 +245,15 @@ export class TelegramNotifier implements Notifier {
    *   （sendRaw 纯文本，不带 parse_mode）
    * @param disablePreview true 时禁用链接预览（sendRaw 报告形态；命中/测试恒开预览）
    * @param previewUrl 命中帖显式锁定预览目标，避免正文靠前的作者主页链接抢占预览。
+   * @param topicUrl 命中帖附「打开原帖」单按钮；Telegram 将单按钮行自然铺满消息宽度。
    */
   private async deliver(
     text: string,
     parseMode: 'HTML' | null,
     disablePreview = false,
     silent = false,
-    previewUrl?: string
+    previewUrl?: string,
+    topicUrl?: string
   ): Promise<void> {
     const cfg = this.getConfig()
     if (!cfg.botToken || !cfg.chatId) {
@@ -271,7 +274,14 @@ export class TelegramNotifier implements Notifier {
         link_preview_options: {
           is_disabled: disablePreview,
           ...(!disablePreview && typeof previewUrl === 'string' && previewUrl !== '' ? { url: previewUrl } : {})
-        }
+        },
+        ...(typeof topicUrl === 'string' && topicUrl !== ''
+          ? {
+              reply_markup: {
+                inline_keyboard: [[{ text: '打开原帖', url: topicUrl }]]
+              }
+            }
+          : {})
       })
     }
 
