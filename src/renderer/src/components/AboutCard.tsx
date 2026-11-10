@@ -154,7 +154,7 @@ export function AboutCard() {
           <section className="update-modal" role="dialog" aria-modal="true" aria-labelledby="docker-update-title">
             <h3 id="docker-update-title">更新 ForumWatch</h3>
             <p>将下载新版镜像并短暂重建服务，配置与历史数据不会丢失。</p>
-            <div className="input-row">
+            <div className="input-row update-modal-actions">
               <button type="button" className="btn" onClick={() => setConfirmUpdate(false)}>取消</button>
               <button type="button" className="btn btn-primary" onClick={() => void applyDockerUpdate()}>立即更新</button>
             </div>
