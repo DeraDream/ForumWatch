@@ -22,6 +22,8 @@ services:
       - fw-data:/data
     # 仅供 WUD 精确识别本服务：追踪 latest 的镜像摘要变化，并只允许其 Compose 更新器操作本服务。
     labels:
+      # watchbydefault=false 时必须显式纳入监控；digest 只决定比较镜像摘要，不能替代此开关。
+      wud.watch: "true"
       wud.watch.digest: "true"
       wud.tag.include: "^latest$"
       wud.trigger.dockercompose.local.enabled: "true"

@@ -522,7 +522,7 @@ docker rm -f forumwatch && docker run -d ...（原参数，建议用 docker comp
 
 ### 自动镜像更新（WUD）
 
-仓库提供的 `docker-compose.yml` 已集成维护中的 [WUD](https://github.com/getwud/wud) Docker Compose 更新器。它每 6 小时检查 `yforward7/forumwatch:latest` 的镜像摘要；发现新版本时自动拉取、重建**仅** `forumwatch` 服务，并等待健康检查。新容器不健康会在 5 分钟内自动回滚。网页会因容器重建短暂断开，恢复连接后会自动刷新以加载新版静态资源；配置和历史数据都在 `fw-data` 卷中，不会丢失。
+仓库提供的 `docker-compose.yml` 已集成维护中的 [WUD](https://github.com/getwud/wud) Docker Compose 更新器。它每 6 小时检查 `yforward7/forumwatch:latest` 的镜像摘要；网页「立即更新」会先要求 WUD 拉取镜像，再重建**仅** `forumwatch` 服务，并等待健康检查。新容器不健康会在 5 分钟内自动回滚。网页会因容器重建短暂断开，恢复连接后会自动刷新以加载新版静态资源；配置和历史数据都在 `fw-data` 卷中，不会丢失。
 
 首次升级 Compose 文件后执行一次：
 

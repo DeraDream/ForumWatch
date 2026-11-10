@@ -155,7 +155,7 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
     return { fromDate, toDate, sourceId, matchedBy, text, limit, offset }
   }
 
-  /** WUD 只在 Compose 内网可达；凭据由宿主 .env 注入，绝不下发至浏览器。 */
+  /** WUD 仅在 Compose 内网可达；部署方若为其配置了 Basic Auth，可选地从 .env 注入凭据。 */
   const wudUser = process.env.FW_WUD_USER
   const wudPassword = process.env.FW_WUD_PASSWORD
   const wudHeaders = (): Record<string, string> =>
@@ -166,9 +166,6 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
   /** 先强制扫描，再异步触发唯一允许的 Compose 更新器。 */
   const applyDockerUpdate = async (): Promise<DockerUpdateResult> => {
     try {
-      if (wudUser === undefined || wudPassword === undefined) {
-        return { ok: false, error: '未配置 WUD 凭据（FW_WUD_USER / FW_WUD_PASSWORD）' }
-      }
       const watched = await fetch('http://wud:3000/api/containers/watch', { method: 'POST', headers: wudHeaders() })
       if (!watched.ok) throw new Error(`WUD 检查失败（HTTP ${watched.status}）`)
       const containers = await watched.json() as Array<{ id?: unknown; name?: unknown; updateAvailable?: unknown }>
