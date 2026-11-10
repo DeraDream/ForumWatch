@@ -110,14 +110,12 @@ describe('escapeHtml', () => {
 })
 
 describe('formatHitMessage', () => {
-  it('四行结构：标题转义加粗 / 分类作者 / 命中词 / 帖子链接；命中词加 # 前缀（issue #2 建议二，Telegram hashtag 可点击筛选）', () => {
+  it('分组结构：标题、元信息与命中归因之间留白；跳转交由 inline button', () => {
     const msg = formatHitMessage(topic, ['冰箱', '便宜&实惠'])
     const expected = [
       `🔔 <b>${escapeHtml(topic.title)}</b>`,
-      `📁 交易 · 👤 ${escapeHtml('张三<b>')}`,
-      `🎯 命中: #冰箱, #便宜&amp;实惠`,
-      `🔗 <a href="https://www.nodeseek.com/post-936634-1">打开帖子</a>`
-    ].join('\n')
+      `📁 交易 · 👤 ${escapeHtml('张三<b>')}\n🎯 命中: #冰箱, #便宜&amp;实惠`
+    ].join('\n\n')
     expect(msg).toBe(expected)
     // 标题里的原始 <script> 不得出现
     expect(msg).not.toContain('<script>')
@@ -128,10 +126,8 @@ describe('formatHitMessage', () => {
     const msg = formatHitMessage(withAuthor, ['冰箱'])
     const expected = [
       `🔔 <b>${escapeHtml(topic.title)}</b>`,
-      `📁 交易 · 👤 <a href="https://www.nodeseek.com/space/9261?x=1&amp;y=2">${escapeHtml('张三<b>')}</a>`,
-      `🎯 命中: #冰箱`,
-      `🔗 <a href="https://www.nodeseek.com/post-936634-1">打开帖子</a>`
-    ].join('\n')
+      `📁 交易 · 👤 <a href="https://www.nodeseek.com/space/9261?x=1&amp;y=2">${escapeHtml('张三<b>')}</a>\n🎯 命中: #冰箱`
+    ].join('\n\n')
     expect(msg).toBe(expected)
   })
 
@@ -142,15 +138,13 @@ describe('formatHitMessage', () => {
     expect(formatHitMessage({ ...topic, authorUrl: '' }, ['冰箱'])).toBe(baseline)
   })
 
-  it('带锐评：💬 行插在「🎯 命中」行之后、链接行之前，内容过 escapeHtml（含 <>&）', () => {
+  it('带锐评：💬 作为与命中信息分开的内容段落，内容过 escapeHtml（含 <>&）', () => {
     const msg = formatHitMessage(topic, ['冰箱'], '这价格 <敢> 再低点 & 我就冲')
     const expected = [
       `🔔 <b>${escapeHtml(topic.title)}</b>`,
-      `📁 交易 · 👤 ${escapeHtml('张三<b>')}`,
-      `🎯 命中: #冰箱`,
-      `💬 锐评: 这价格 &lt;敢&gt; 再低点 &amp; 我就冲`,
-      `🔗 <a href="https://www.nodeseek.com/post-936634-1">打开帖子</a>`
-    ].join('\n')
+      `📁 交易 · 👤 ${escapeHtml('张三<b>')}\n🎯 命中: #冰箱`,
+      `💬 锐评: 这价格 &lt;敢&gt; 再低点 &amp; 我就冲`
+    ].join('\n\n')
     expect(msg).toBe(expected)
     // 锐评里的原始 <敢> 不得出现（LLM 输出同样按不可信内容转义）
     expect(msg).not.toContain('<敢>')
@@ -159,7 +153,7 @@ describe('formatHitMessage', () => {
 
   it('回归：不传 / undefined / null / 空串锐评时，消息与两参版本逐字节一致（仍是四行）', () => {
     const baseline = formatHitMessage(topic, ['冰箱', '便宜&实惠'])
-    expect(baseline.split('\n')).toHaveLength(4) // 现状：四行、无 💬 行
+    expect(baseline.split('\n')).toHaveLength(4) // 标题、分组空行、元信息、命中归因
     expect(baseline).not.toContain('锐评')
     expect(formatHitMessage(topic, ['冰箱', '便宜&实惠'], undefined)).toBe(baseline)
     expect(formatHitMessage(topic, ['冰箱', '便宜&实惠'], null)).toBe(baseline)
@@ -170,19 +164,17 @@ describe('formatHitMessage', () => {
     const msg = formatHitMessage(topic, [], null, '白菜月付 <年付> & 88')
     const expected = [
       `🔔 <b>${escapeHtml(topic.title)}</b>`,
-      `📁 交易 · 👤 ${escapeHtml('张三<b>')}`,
-      `🎯 命中规则: #白菜月付 &lt;年付&gt; &amp; 88`,
-      `🔗 <a href="https://www.nodeseek.com/post-936634-1">打开帖子</a>`
-    ].join('\n')
+      `📁 交易 · 👤 ${escapeHtml('张三<b>')}\n🎯 命中规则: #白菜月付 &lt;年付&gt; &amp; 88`
+    ].join('\n\n')
     expect(msg).toBe(expected)
     expect(msg).not.toContain('命中: ') // 关键词行被替换
   })
 
   it('规则命中 + 锐评并存：💬 行仍在「🎯 命中规则」行之后', () => {
     const msg = formatHitMessage(topic, [], '这价格可以冲', '白菜月付')
-    expect(msg.split('\n')).toHaveLength(5)
-    expect(msg.split('\n')[2]).toBe('🎯 命中规则: #白菜月付')
-    expect(msg.split('\n')[3]).toBe('💬 锐评: 这价格可以冲')
+    expect(msg.split('\n')).toHaveLength(6)
+    expect(msg.split('\n')[3]).toBe('🎯 命中规则: #白菜月付')
+    expect(msg.split('\n')[5]).toBe('💬 锐评: 这价格可以冲')
   })
 
   it('回归：matchedRule 不传 / null / 空串（literal/semantic 命中）→ 与三参版本逐字节一致', () => {
@@ -193,7 +185,7 @@ describe('formatHitMessage', () => {
     expect(baseline).toContain('🎯 命中: #冰箱')
   })
 
-  it('摘要行：topic.excerpt 非空时 📄 行插在标题之后、分类作者行之前，内容过 escapeHtml', () => {
+  it('摘要行：topic.excerpt 非空时作为元信息之后的独立段落，内容过 escapeHtml', () => {
     const withExcerpt: Topic = {
       ...topic,
       excerpt: '9 成新海尔冰箱 & <附> 冰柜，自提优先'
@@ -201,11 +193,9 @@ describe('formatHitMessage', () => {
     const msg = formatHitMessage(withExcerpt, ['冰箱'])
     const expected = [
       `🔔 <b>${escapeHtml(topic.title)}</b>`,
-      `📄 9 成新海尔冰箱 &amp; &lt;附&gt; 冰柜，自提优先`,
-      `📁 交易 · 👤 ${escapeHtml('张三<b>')}`,
-      `🎯 命中: #冰箱`,
-      `🔗 <a href="https://www.nodeseek.com/post-936634-1">打开帖子</a>`
-    ].join('\n')
+      `📁 交易 · 👤 ${escapeHtml('张三<b>')}\n🎯 命中: #冰箱`,
+      `📄 9 成新海尔冰箱 &amp; &lt;附&gt; 冰柜，自提优先`
+    ].join('\n\n')
     expect(msg).toBe(expected)
     expect(msg).not.toContain('<附>')
   })
@@ -214,10 +204,8 @@ describe('formatHitMessage', () => {
     const msg = formatHitMessage(topic, [], null, null, 'PT站庆开放注册并免站7天，属于免费可薅的活动 <值得> & 推荐冲')
     const expected = [
       `🔔 <b>${escapeHtml(topic.title)}</b>`,
-      `📁 交易 · 👤 ${escapeHtml('张三<b>')}`,
-      `🎯 语义命中: PT站庆开放注册并免站7天，属于免费可薅的活动 &lt;值得&gt; &amp; 推荐冲`,
-      `🔗 <a href="https://www.nodeseek.com/post-936634-1">打开帖子</a>`
-    ].join('\n')
+      `📁 交易 · 👤 ${escapeHtml('张三<b>')}\n🎯 语义命中: PT站庆开放注册并免站7天，属于免费可薅的活动 &lt;值得&gt; &amp; 推荐冲`
+    ].join('\n\n')
     expect(msg).toBe(expected)
     expect(msg).not.toContain('🎯 命中: ')
     expect(msg).not.toContain('<值得>')
@@ -230,7 +218,7 @@ describe('formatHitMessage', () => {
 
   it('语义命中但 AI 未给理由（null/空串）→ 仅显示「🎯 语义命中」无冒号尾巴', () => {
     const msg = formatHitMessage(topic, [], null, null, null)
-    expect(msg).toContain('🎯 语义命中\n')
+    expect(msg).toMatch(/🎯 语义命中$/)
     expect(formatHitMessage(topic, [], null, null, '')).toBe(msg)
   })
 

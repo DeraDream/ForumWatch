@@ -75,9 +75,8 @@ function clipHitReason(s: string): string {
  *   词识别为 hashtag（点击即在会话内筛选同标签消息），用户可按触发词过滤推送流。
  *   语义命中的理由是自由文本句子，不加前缀。
  *
- * @param commentary AI 锐评（第三轮，可选）：**非空字符串**时在「🎯 命中」行之后插一行
- *   `💬 锐评: {commentary}`（转义后）；null / undefined / 空串时整行省略——两参调用
- *   的输出与升级前逐字节一致（引擎侧未生成锐评时直接不传即可）。
+ * @param commentary AI 锐评（第三轮，可选）：**非空字符串**时作为独立内容段落输出
+ *   `💬 锐评: {commentary}`（转义后）；null / undefined / 空串时整段省略。
  * @param matchedRule 命中的价格规则 label（第五轮，可选）：**非空字符串**（= matchedBy
  *   'rule'——规则命中恒有 label，rules.ts 的 RuleMatch.label 已归一为 label ?? id）
  *   时「🎯 命中」行改为 `🎯 命中规则: #{matchedRule}`（转义后）；null / undefined /
@@ -116,16 +115,19 @@ export function formatHitMessage(
     topic.author.length > 0
       ? `👤 <a href="${escapeHtml(topic.authorUrl)}">${escapeHtml(topic.author)}</a>`
       : `👤 ${escapeHtml(topic.author)}`
-  const lines = [`🔔 <b>${escapeHtml(topic.title)}</b>`]
-  if (typeof topic.excerpt === 'string' && topic.excerpt.length > 0) {
-    lines.push(`📄 ${escapeHtml(topic.excerpt)}`)
-  }
-  lines.push(`📁 ${escapeHtml(topic.category)} · ${authorPart}`, hitLine)
-  if (typeof commentary === 'string' && commentary.length > 0) {
-    lines.push(`💬 锐评: ${escapeHtml(commentary)}`)
-  }
-  lines.push(`🔗 <a href="${topic.url}">打开帖子</a>`)
-  return lines.join('\n')
+  // 标题 / 元信息与命中归因 / 摘要 / 锐评各自成段，以留白降低推送卡片的信息密度。
+  // 跳转由 inline keyboard「打开原帖」承担；link_preview_options 仍显式锁定帖子预览。
+  const sections = [
+    `🔔 <b>${escapeHtml(topic.title)}</b>`,
+    [`📁 ${escapeHtml(topic.category)} · ${authorPart}`, hitLine].join('\n'),
+    typeof topic.excerpt === 'string' && topic.excerpt.length > 0
+      ? `📄 ${escapeHtml(topic.excerpt)}`
+      : '',
+    typeof commentary === 'string' && commentary.length > 0
+      ? `💬 锐评: ${escapeHtml(commentary)}`
+      : ''
+  ]
+  return sections.filter((section) => section !== '').join('\n\n')
 }
 
 const MAX_ATTEMPTS = 3

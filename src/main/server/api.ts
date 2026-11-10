@@ -171,7 +171,14 @@ export function createInvokeHandlers(ctx: WebApiContext): Map<string, InvokeHand
       const containers = await watched.json() as Array<{ id?: unknown; name?: unknown; updateAvailable?: unknown }>
       const target = containers.find((c) => c.name === 'forumwatch')
       if (typeof target?.id !== 'string') return { ok: false, error: 'WUD 未发现 forumwatch 服务' }
-      if (target.updateAvailable !== true) return { ok: false, error: '镜像已是最新版本' }
+      if (target.updateAvailable !== true) {
+        // GitHub Release 与 Docker Hub 多架构镜像由独立 workflow 发布：release 已可见、
+        // latest 尚在构建/推送时不能误报「镜像已是最新」。
+        const status = updateStatus()
+        return status.state === 'available'
+          ? { ok: false, error: `Docker 镜像 v${status.latest} 正在构建或推送，请稍后重试` }
+          : { ok: false, error: '镜像已是最新版本' }
+      }
       // 不等待重建完成：本服务会在请求途中被替换；前端已拿到 ok 后显示阶段进度，
       // SSE 重连成功时 web-shim 自动刷新。
       void fetch(`http://wud:3000/api/containers/${encodeURIComponent(target.id)}/triggers/dockercompose/local?overrideCooldown=true`, {
