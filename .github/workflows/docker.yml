@@ -14,6 +14,12 @@ on:
       - '.github/workflows/docker.yml'
   workflow_dispatch:
 
+# latest 与 GHA BuildKit 缓存都是共享写目标；并发发版会互相争用，甚至让旧版本
+# 最后覆盖 latest。因此同一时刻只保留最新一次镜像发布。
+concurrency:
+  group: docker-publish
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
