@@ -420,6 +420,16 @@ export class DesktopRuntime {
       pause: () => engine.pause(),
       resume: () => engine.resume(),
       runNow: () => engine.runNow(),
+      getConfig: () => this.store.get(),
+      updateConfig: (update) => {
+        const next = update(this.store.get())
+        this.store.save(next)
+        const saved = this.store.get()
+        this.applyConfigSideEffects(saved)
+        return saved
+      },
+      getRecentHits: async (limit) => (await this.hitsStore.readRecent(7)).slice(-limit).reverse(),
+      sendTest: () => engine.sendTestNotification(),
       log: this.logger
     })
 

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { HttpRequestInit, HttpResponse, FetchLike } from '../net/http-types'
-import { INITIAL_ENGINE_STATUS, type EngineStatus } from '@shared/types'
+import { DEFAULT_APP_CONFIG, INITIAL_ENGINE_STATUS, type EngineStatus, type HitRecord } from '@shared/types'
 import {
   BotCommandController,
   formatStatusReply,
@@ -54,6 +54,8 @@ interface Harness {
   setEnabled: (enabled: boolean) => void
   setAllowedChatIds: (ids: string[]) => void
   setCredentials: (c: { botToken: string; chatId: string } | null) => void
+  getConfigValue: () => typeof DEFAULT_APP_CONFIG
+  setRecentHits: (hits: HitRecord[]) => void
   /**
    * 设定 getUpdates 响应队列（用尽后回落空批 200）。项可以是：
    * - string（200 响应体）/ HttpResponse（构造 409、500 等非 2xx）
@@ -75,6 +77,8 @@ function makeHarness(opts: { allowedChatIds?: string[]; credentialsNull?: boolea
   let resumeCount = 0
   let runNowCount = 0
   let status = statusOf()
+  let config = structuredClone(DEFAULT_APP_CONFIG)
+  let recentHits: HitRecord[] = []
   let enabled = true
   let allowedChatIds = opts.allowedChatIds ?? []
   let credentials: { botToken: string; chatId: string } | null = opts.credentialsNull
@@ -121,6 +125,13 @@ function makeHarness(opts: { allowedChatIds?: string[]; credentialsNull?: boolea
     runNow: () => {
       runNowCount++
     },
+    getConfig: () => structuredClone(config),
+    updateConfig: (update) => {
+      config = update(structuredClone(config))
+      return structuredClone(config)
+    },
+    getRecentHits: async (limit) => recentHits.slice(0, limit),
+    sendTest: async () => {},
     log: {
       info: (msg) => logs.push({ level: 'info', msg }),
       warn: (msg) => logs.push({ level: 'warn', msg }),
@@ -147,6 +158,8 @@ function makeHarness(opts: { allowedChatIds?: string[]; credentialsNull?: boolea
     setEnabled: (v) => (enabled = v),
     setAllowedChatIds: (ids) => (allowedChatIds = ids),
     setCredentials: (c) => (credentials = c),
+    getConfigValue: () => structuredClone(config),
+    setRecentHits: (hits) => (recentHits = hits),
     queueUpdates: (items) => (queue = [...items]),
     stopAfterGetUpdates: (n) => (stopAfter = n),
     getUpdatesCallCount: () => getUpdatesCalls
@@ -304,7 +317,7 @@ describe('指令分派', () => {
     expect(h.replies[0]!.text).toContain('已触发')
   })
 
-  it('/help：列出全部 5 条指令', async () => {
+  it('/help：列出全部遥控指令', async () => {
     const h = makeHarness()
     h.queueUpdates([updatesBody([{ id: 1, chatId: MAIN_CHAT, text: '/help' }])])
     h.stopAfterGetUpdates(2)
@@ -335,6 +348,49 @@ describe('指令分派', () => {
     expect(h.replies).toHaveLength(1)
     expect(h.replies[0]!.text).toContain('未知指令')
     expect(h.replies[0]!.text).toContain('/help')
+  })
+
+  it('关键词命令：可查看、添加、删除包含词与排除词（无需二次确认）', async () => {
+    const h = makeHarness()
+    h.queueUpdates([
+      updatesBody([
+        { id: 1, chatId: MAIN_CHAT, text: '/addkw VPS' },
+        { id: 2, chatId: MAIN_CHAT, text: '/addexclude 抽奖' },
+        { id: 3, chatId: MAIN_CHAT, text: '/keywords' },
+        { id: 4, chatId: MAIN_CHAT, text: '/exclude' },
+        { id: 5, chatId: MAIN_CHAT, text: '/delkw VPS' },
+        { id: 6, chatId: MAIN_CHAT, text: '/delexclude 抽奖' }
+      ])
+    ])
+    h.stopAfterGetUpdates(1)
+    h.controller.start()
+    await h.controller.waitStopped()
+    expect(h.replies.map((reply) => reply.text).join('\n')).toContain('已添加监控词')
+    expect(h.replies.map((reply) => reply.text).join('\n')).toContain('已添加排除词')
+    expect(h.replies.map((reply) => reply.text).join('\n')).toContain('VPS')
+    expect(h.getConfigValue().includeKeywords).toEqual([])
+    expect(h.getConfigValue().excludeKeywords).toEqual([])
+  })
+
+  it('Reply Keyboard：点击添加排除词后接收空格或英文逗号分隔的下一条输入；非法格式报错', async () => {
+    const h = makeHarness()
+    h.queueUpdates([
+      updatesBody([
+        { id: 1, chatId: MAIN_CHAT, text: '添加排除词' },
+        { id: 2, chatId: MAIN_CHAT, text: '抽奖, 求助 已出' },
+        { id: 3, chatId: MAIN_CHAT, text: '添加监控词' },
+        { id: 4, chatId: MAIN_CHAT, text: 'VPS，香港' },
+        { id: 5, chatId: MAIN_CHAT, text: 'VPS 香港' }
+      ])
+    ])
+    h.stopAfterGetUpdates(1)
+    h.controller.start()
+    await h.controller.waitStopped()
+    expect(h.getConfigValue().excludeKeywords).toEqual(['抽奖', '求助', '已出'])
+    expect(h.getConfigValue().includeKeywords).toEqual(['VPS', '香港'])
+    expect(h.replies.map((reply) => reply.text).join('\n')).toContain('输入格式错误')
+    const send = h.calls.find((call) => call.url.includes('/sendMessage'))
+    expect(JSON.parse(send!.init?.body ?? '{}').reply_markup.keyboard).toHaveLength(3)
   })
 
   it('带 @botname 后缀与参数的指令照常分派（/status@fw_bot）', async () => {

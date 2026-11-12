@@ -1,8 +1,8 @@
 /**
  * Telegram Bot 双向遥控内核（R9-W1，DEC-6 + 坑8 三条接线纪律）。
  *
- * 通过 bot 的 getUpdates 长轮询接收指令（/status /pause /resume /poll /help），
- * 用 sendMessage 回复——远程暂停/恢复/补一轮监控，手机上即可操作。
+ * 通过 bot 的 getUpdates 长轮询接收状态、轮询、关键词管理等指令，
+ * 用 sendMessage 回复——远程暂停/恢复/补一轮监控及维护全局关键词。
  *
  * 坑8 三条纪律（违反任何一条都会出事）：
  * 1. **绝不进 TelegramNotifier 的 1050ms 串行队列**：长轮询 getUpdates 一挂
@@ -36,7 +36,7 @@
  */
 
 import type { FetchLike, HttpRequestInit, HttpResponse } from '../net/http-types'
-import type { EngineStatus } from '../../shared/types'
+import type { AppConfig, EngineStatus, HitRecord } from '../../shared/types'
 
 /** getUpdates 长轮询的服务端挂起秒数（Telegram 上限 50，取 25 折中） */
 export const LONG_POLL_TIMEOUT_SEC = 25
@@ -71,6 +71,13 @@ export interface BotCommandControllerDeps {
   resume: () => void
   /** /poll：立即补一轮（engine.runNow 内部尊重 desired，暂停期 no-op） */
   runNow: () => Promise<void> | void
+  /** 当前配置与原子更新；实现方负责落盘后的运行时副作用同步 */
+  getConfig: () => AppConfig
+  updateConfig: (update: (cfg: AppConfig) => AppConfig) => AppConfig
+  /** 最近命中（新旧排序由 controller 统一处理） */
+  getRecentHits: (limit: number) => Promise<HitRecord[]>
+  /** 向全部就绪通知通道发送测试消息 */
+  sendTest: () => Promise<void>
   log: BotCommandLogger
   /** 测试注入假时钟（epoch ms）；默认 Date.now */
   now?: () => number
@@ -138,12 +145,30 @@ function formatDateTime(iso: string): string {
 }
 
 /** /help 文案 */
+/** 输入框下方的 Reply Keyboard：只放新增管理功能，既有五条斜杠命令不放入按钮。 */
+const REPLY_KEYBOARD = [
+  ['查看监控词', '添加监控词', '删除监控词'],
+  ['查看排除词', '添加排除词', '删除排除词'],
+  ['发送测试通知', '最近命中', '配置摘要']
+]
+
+type PendingKeywordAction = { field: 'includeKeywords' | 'excludeKeywords'; add: boolean }
+
 const HELP_REPLY = [
   'ℹ️ ForumWatch 遥控指令：',
   '/status — 查看运行状态',
   '/pause — 暂停监控',
   '/resume — 恢复监控',
   '/poll — 立即轮询一轮',
+  '/keywords — 查看包含关键词',
+  '/addkw 关键词 — 添加包含关键词',
+  '/delkw 关键词 — 删除包含关键词',
+  '/exclude — 查看排除关键词',
+  '/addexclude 关键词 — 添加排除关键词',
+  '/delexclude 关键词 — 删除排除关键词',
+  '/test — 发送测试通知',
+  '/hits [数量] — 查看最近命中（默认 5，最多 10）',
+  '/config — 查看关键配置摘要',
   '/help — 显示本帮助'
 ].join('\n')
 
@@ -169,6 +194,8 @@ export class BotCommandController {
   private offset = 0
   /** 去重日志的上次 emit 时刻（消息 → epoch ms；409 5min / 未授权 warn 1min） */
   private readonly dedupLast = new Map<string, number>()
+  /** 点击增删词按钮后，按 chat 隔离的下一条文本输入状态。 */
+  private readonly pendingKeywordActions = new Map<string, PendingKeywordAction>()
 
   constructor(deps: BotCommandControllerDeps) {
     this.deps = deps
@@ -374,15 +401,53 @@ export class BotCommandController {
 
     const trimmed = text.trim()
     if (trimmed === '') return
+    const buttonReply = await this.handleKeyboardButton(trimmed, chatIdStr)
+    if (buttonReply !== null) {
+      await this.sendReply(botToken, chatIdStr, buttonReply)
+      return
+    }
     const name = parseCommandName(trimmed)
-    if (name === null) return // 非指令文本：忽略
+    if (name === null) {
+      const pending = this.pendingKeywordActions.get(chatIdStr)
+      if (pending === undefined) return // 非指令文本：忽略
+      const reply = this.changeKeywordsFromInput(pending, trimmed)
+      if (reply.startsWith('✅')) this.pendingKeywordActions.delete(chatIdStr)
+      await this.sendReply(botToken, chatIdStr, reply)
+      return
+    }
+    this.pendingKeywordActions.delete(chatIdStr) // 新指令取消未完成的按钮输入
+    const args = trimmed.slice(1).split(/\s+/).slice(1).join(' ').trim()
 
-    const reply = this.executeCommand(name)
+    const reply = await this.executeCommand(name, args)
     if (reply !== null) await this.sendReply(botToken, chatIdStr, reply)
   }
 
-  /** 指令分派（纯同步：engine 调用 + 文案组装）；未知指令 → 提示文案 */
-  private executeCommand(name: string): string | null {
+  /** Reply Keyboard 分派。增删操作进入等待输入态，查询/测试直接执行。 */
+  private async handleKeyboardButton(text: string, chatId: string): Promise<string | null> {
+    const pending: Record<string, PendingKeywordAction> = {
+      '添加监控词': { field: 'includeKeywords', add: true },
+      '删除监控词': { field: 'includeKeywords', add: false },
+      '添加排除词': { field: 'excludeKeywords', add: true },
+      '删除排除词': { field: 'excludeKeywords', add: false }
+    }
+    if (text in pending) {
+      this.pendingKeywordActions.set(chatId, pending[text]!)
+      const action = pending[text]!
+      return `请发送要${action.add ? '添加' : '删除'}的${action.field === 'includeKeywords' ? '监控词' : '排除词'}；多个词用空格或英文逗号分隔。`
+    }
+    const commands: Record<string, [string, string]> = {
+      '查看监控词': ['keywords', ''],
+      '查看排除词': ['exclude', ''],
+      '发送测试通知': ['test', ''],
+      '最近命中': ['hits', ''],
+      '配置摘要': ['config', '']
+    }
+    const command = commands[text]
+    return command === undefined ? null : this.executeCommand(...command)
+  }
+
+  /** 指令分派；配置变更立即落盘，未知指令返回帮助提示。 */
+  private async executeCommand(name: string, args: string): Promise<string | null> {
     switch (name) {
       case 'status':
         return formatStatusReply(this.deps.getStatus())
@@ -405,6 +470,30 @@ export class BotCommandController {
           this.deps.log.error(`bot /poll runNow threw: ${describeError(err)}`)
           return `❌ 触发失败：${err instanceof Error ? err.message : String(err)}`
         }
+      case 'keywords':
+        return formatKeywordList('📌 当前包含关键词', this.deps.getConfig().includeKeywords)
+      case 'exclude':
+        return formatKeywordList('🚫 当前排除关键词', this.deps.getConfig().excludeKeywords)
+      case 'addkw':
+        return this.changeKeyword('includeKeywords', args, true)
+      case 'delkw':
+        return this.changeKeyword('includeKeywords', args, false)
+      case 'addexclude':
+        return this.changeKeyword('excludeKeywords', args, true)
+      case 'delexclude':
+        return this.changeKeyword('excludeKeywords', args, false)
+      case 'test':
+        try {
+          await this.deps.sendTest()
+          return '✅ 测试通知已发送'
+        } catch (err) {
+          this.deps.log.warn(`bot /test failed: ${describeError(err)}`)
+          return `❌ 测试通知发送失败：${err instanceof Error ? err.message : String(err)}`
+        }
+      case 'hits':
+        return this.recentHits(args)
+      case 'config':
+        return formatConfigReply(this.deps.getConfig())
       case 'help':
         return HELP_REPLY
       default:
@@ -412,12 +501,84 @@ export class BotCommandController {
     }
   }
 
+  /** 添加/删除全局包含词或排除词；store sanitize 仍是最终校验与去重口径。 */
+  private changeKeyword(
+    field: 'includeKeywords' | 'excludeKeywords',
+    rawKeyword: string,
+    add: boolean
+  ): string {
+    const keyword = rawKeyword.trim()
+    if (keyword === '') {
+      const action = add ? '添加' : '删除'
+      return `请在命令后填写要${action}的关键词，例如 /${field === 'includeKeywords' ? (add ? 'addkw' : 'delkw') : (add ? 'addexclude' : 'delexclude')} VPS`
+    }
+    const current = this.deps.getConfig()[field]
+    const exists = current.some((item) => item.toLowerCase() === keyword.toLowerCase())
+    if (add && exists) return `“${keyword}” 已在列表中`
+    if (!add && !exists) return `未找到 “${keyword}”`
+
+    try {
+      const saved = this.deps.updateConfig((cfg) => ({
+        ...cfg,
+        [field]: add
+          ? [...cfg[field], keyword]
+          : cfg[field].filter((item) => item.toLowerCase() !== keyword.toLowerCase())
+      }))
+      const changed = saved[field].some((item) => item.toLowerCase() === keyword.toLowerCase())
+      if (add && !changed) return `❌ “${keyword}” 未能添加（可能超过数量或长度限制）`
+      if (!add && changed) return `❌ “${keyword}” 未能删除`
+      return add
+        ? `✅ 已添加${field === 'includeKeywords' ? '监控词' : '排除词'}：“${keyword}”`
+        : `✅ 已删除：“${keyword}”`
+    } catch (err) {
+      this.deps.log.warn(`bot keyword config update failed: ${describeError(err)}`)
+      return `❌ 保存失败：${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+
+  /** 按按钮约定解析多个词：只接受空格或英文逗号分隔，拒绝空项与中文逗号。 */
+  private changeKeywordsFromInput(action: PendingKeywordAction, raw: string): string {
+    if (raw.includes('，') || /[\r\n]/.test(raw)) {
+      return '❌ 输入格式错误：多个词请用空格或英文逗号分隔，不能使用中文逗号或换行。'
+    }
+    const keywords = raw.split(/[ ,]+/).filter(Boolean)
+    if (keywords.length === 0 || keywords.some((item) => item.length > 200)) {
+      return '❌ 输入非法：请填写非空关键词，单个关键词不能超过 200 个字符。'
+    }
+    const field = action.field
+    const current = this.deps.getConfig()[field]
+    const requested = [...new Map(keywords.map((item) => [item.toLowerCase(), item])).values()]
+    const next = action.add
+      ? [...current, ...requested.filter((item) => !current.some((old) => old.toLowerCase() === item.toLowerCase()))]
+      : current.filter((old) => !requested.some((item) => item.toLowerCase() === old.toLowerCase()))
+    if (next.length === current.length) return action.add ? '❌ 没有可添加的新关键词。请重新输入。' : '❌ 未找到可删除的关键词。请重新输入。'
+    try {
+      const saved = this.deps.updateConfig((cfg) => ({ ...cfg, [field]: next }))
+      return `✅ 已${action.add ? '添加' : '删除'} ${Math.abs(saved[field].length - current.length)} 个${field === 'includeKeywords' ? '监控词' : '排除词'}：${requested.join('、')}`
+    } catch (err) {
+      this.deps.log.warn(`bot keyword config update failed: ${describeError(err)}`)
+      return `❌ 保存失败：${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+
+  private async recentHits(rawLimit: string): Promise<string> {
+    const parsed = rawLimit === '' ? 5 : Number(rawLimit)
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) return '数量请填写 1 到 10，例如 /hits 5'
+    const hits = await this.deps.getRecentHits(parsed)
+    if (hits.length === 0) return '最近没有命中记录'
+    return ['🕒 最近命中：', ...hits.map((hit, index) => `${index + 1}. ${hit.topic.title}\n${hit.topic.url}`)].join('\n')
+  }
+
   /** 回复（sendMessage，自己的 post 直调——绝不进推送队列，坑8 第一条） */
   private async sendReply(botToken: string, chatId: string, text: string): Promise<void> {
     const init: HttpRequestInit = {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text })
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        reply_markup: { keyboard: REPLY_KEYBOARD, resize_keyboard: true, is_persistent: true }
+      })
     }
     try {
       const res = await this.deps.post(
@@ -488,4 +649,21 @@ export class BotCommandController {
 /** 响应体裁剪（日志用；与 telegram.ts 的 200 字符口径一致） */
 function clip(body: string): string {
   return body.slice(0, 200)
+}
+
+function formatKeywordList(title: string, keywords: string[]): string {
+  return keywords.length === 0 ? `${title}\n（未设置）` : `${title}\n${keywords.map((item, index) => `${index + 1}. ${item}`).join('\n')}`
+}
+
+/** 不包含凭据的配置摘要，避免 Telegram 会话中泄露 token / key / secret。 */
+function formatConfigReply(cfg: AppConfig): string {
+  const enabledSources = cfg.sources.filter((source) => source.enabled).map((source) => source.id)
+  return [
+    '⚙️ ForumWatch 配置摘要',
+    `包含词: ${cfg.includeKeywords.length} 个 · 排除词: ${cfg.excludeKeywords.length} 个`,
+    `轮询间隔: ${cfg.pollIntervalSec} 秒`,
+    `启用来源: ${enabledSources.length > 0 ? enabledSources.join('、') : '无'}`,
+    `推送: ${cfg.notifyEnabled ? '开启' : '关闭'} · ${cfg.notify.mode === 'instant' ? '实时推送' : '摘要攒批'}`,
+    `AI 模式: ${cfg.ai.matchMode === 'both' ? '字面+语义' : cfg.ai.matchMode === 'semantic' ? '语义' : '字面'}`
+  ].join('\n')
 }

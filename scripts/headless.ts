@@ -680,6 +680,15 @@ async function main(): Promise<number | null> {
     pause: () => engine.pause(),
     resume: () => engine.resume(),
     runNow: () => engine.runNow(),
+    getConfig: () => store.get(),
+    updateConfig: (update) => {
+      store.save(update(store.get()))
+      diskConfig = store.get()
+      rebuildDerived(getEffective())
+      return diskConfig
+    },
+    getRecentHits: async (limit) => (await hitsStore.readRecent(7)).slice(-limit).reverse(),
+    sendTest: () => engine.sendTestNotification(),
     log: logger
   })
   const alignRemoteControl = (eff: AppConfig): void => {
